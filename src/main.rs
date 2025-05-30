@@ -58,10 +58,10 @@ impl Render for MainApp {
             .child(
                 // Original content area
                 div()
-                    .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.top || tiling.left)), |el| {
+                    .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
                         el.rounded_bl_lg()
                     })
-                    .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.top || tiling.right)), |el| {
+                    .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.right)), |el| {
                         el.rounded_br_lg()
                     })
                     .bg(rgb(0x505050)) // Background for the content area
@@ -91,7 +91,7 @@ fn main() {
                 window_background: gpui::WindowBackgroundAppearance::Transparent,
                 focus: true,
                 titlebar: None,
-                window_min_size: Some(initial_size),
+                
                 app_id: Some("Control".into()),
                 window_decorations: Some(WindowDecorations::Client), // IMPORTANT: Enable client-side decorations
                 // -------------------------------------

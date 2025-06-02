@@ -1,15 +1,7 @@
-[package]
-name = "control"
-version = "0.1.0"
-edition = "2024"
 
-[dependencies]
+[workspace]
+members = ["crates/control", "crates/ui"]
 
-gpui = { git = "https://github.com/zed-industries/zed" }
+[workspace.dependencies]
+gpui = { git = "https://github.com/zed-industries/zed.git" }
 unicode-segmentation = "1.12.0"
-
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = "z"
-strip = true

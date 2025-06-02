@@ -186,6 +186,12 @@ pub fn focus_previous(window: &mut Window, cx: &mut App) {
     }
 }
 
+/// Unfocus all elements by blurring the window
+pub fn unfocus_all(window: &mut Window) {
+    println!("Unfocusing all elements");
+    window.blur();
+}
+
 
 #[derive(Clone, Copy, Debug)]
 pub struct EnterFocusEvent {}

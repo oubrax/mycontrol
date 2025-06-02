@@ -89,6 +89,10 @@ impl Render for MainApp {
                     .gap_2()
                     .justify_center()
                     .items_center()
+                    .on_mouse_down(MouseButton::Left, |_, window, _| {
+                        // Unfocus all elements when clicking on empty space
+                        focus::unfocus_all(window);
+                    })
                     .child(
                         Button::new("button1")
                             .label("Solid")
@@ -304,7 +308,7 @@ fn main() {
     let t = Theme {
         all_colors: ui::theme::ThemeColorWithMode { light, dark },
         colors: light,
-        radius: px(7.5),
+        radius: px(10.),
         shadow: false,
         font_family: "Cantrell".into(),
         font_size: px(15.),

@@ -10,9 +10,9 @@ use crate::{
 };
 use gpui::FocusHandle;
 use gpui::{
-    Action, AnyElement, App, BoxShadow, ClickEvent, Corners, Div, Edges, ElementId,
-    Hsla, InteractiveElement, IntoElement, Keystroke, MouseButton, ParentElement,
-    Pixels, Point, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled, Window, div,
+    Action, AnyElement, App, BoxShadow, ClickEvent, Corners, Div, Edges, ElementId, Hsla,
+    InteractiveElement, IntoElement, Keystroke, MouseButton, ParentElement, Pixels, Point,
+    RenderOnce, SharedString, StatefulInteractiveElement as _, Styled, Window, div,
     prelude::FluentBuilder as _, px, relative,
 };
 
@@ -331,9 +331,13 @@ impl Button {
         // Register a clone for Enter key handling
         let element_id = self.id.clone();
         let enter_handler = shared_handler.clone();
-        focus::register_button_handler(cx, element_id, Box::new(move |event, window, app| {
-            enter_handler(event, window, app);
-        }));
+        focus::register_button_handler(
+            cx,
+            element_id,
+            Box::new(move |event, window, app| {
+                enter_handler(event, window, app);
+            }),
+        );
 
         // Set the original handler for normal clicks
         let click_handler = shared_handler.clone();
@@ -413,11 +417,14 @@ impl RenderOnce for Button {
             _ => self.size,
         };
 
-        let focused = self.focus_handle.map(|f|f.is_focused(window)).unwrap_or(false);
+        let focused = self
+            .focus_handle
+            .map(|f| f.is_focused(window))
+            .unwrap_or(false);
         let ring_color = if self.variant == ButtonVariant::Danger {
-            cx.theme().danger.lighten(0.5)
+            cx.theme().danger.lighten(0.5).opacity(0.1)
         } else {
-            cx.theme().ring.opacity(0.5)
+            cx.theme().ring.opacity(0.1)
         };
         self.base
             .id(self.id)
@@ -535,12 +542,20 @@ impl RenderOnce for Button {
             )
             .when(focused, |this| {
                 this.shadow(
-                    [BoxShadow {
-                        blur_radius: px(0.1),
-                        color: ring_color,
-                        offset: Point::new(px(0.), px(0.)),
-                        spread_radius: px(1.5),
-                    }]
+                    [
+                        BoxShadow {
+                            blur_radius: px(0.5),
+                            color: ring_color,
+                            offset: Point::new(px(0.), px(0.)),
+                            spread_radius: px(3.5),
+                        },
+                        BoxShadow {
+                            blur_radius: px(0.5),
+                            color: cx.theme().background,
+                            offset: Point::new(px(0.), px(0.)),
+                            spread_radius: px(1.5),
+                        },
+                    ]
                     .to_vec(),
                 )
                 .border_color(ring_color.alpha(0.1))

@@ -419,6 +419,7 @@ impl RenderOnce for Button {
 
         let focused = self
             .focus_handle
+            .clone()
             .map(|f| f.is_focused(window))
             .unwrap_or(false);
         let ring_color = if self.variant == ButtonVariant::Danger {
@@ -506,39 +507,44 @@ impl RenderOnce for Button {
             })
             .when_some(
                 self.on_click.filter(|_| !self.disabled && !self.loading),
-                |this, on_click| {
-                    let stop_propagation = self.stop_propagation;
-                    let on_click = Rc::new(on_click);
-
-                    this.on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        window.prevent_default();
-                        if stop_propagation {
-                            cx.stop_propagation();
-                        }
-                    })
-                    // .on_key_down({
-                    //     let on_click = on_click.clone();
-                    //     let focus_handle = self.focus_handle.clone();
-                    //     move |event, window, cx| {
-                    //         println!("x");
-                    //         if (event.keystroke == Keystroke::parse("enter").unwrap()
-                    //             || event.keystroke == Keystroke::parse("space").unwrap())
-                    //             && focus_handle.is_focused(window)
-                    //         {
-                    //             let click_event = ClickEvent::default();
-                    //             (on_click)(&click_event, window, cx);
-                    //             window.prevent_default();
-                    //             cx.stop_propagation();
-                    //         }
-                    //     }
-                    // })
-                    .on_click({
-                        let on_click = on_click.clone();
-                        move |event, window, cx| {
-                            (on_click)(event, window, cx);
-                        }
-                    })
-                },
+                {
+                    let focus_handle = self.focus_handle.unwrap();
+                    move |this, on_click| {
+                        let stop_propagation = self.stop_propagation;
+                        let on_click = Rc::new(on_click);
+    
+                        this.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                            window.prevent_default();
+                            if stop_propagation {
+                                cx.stop_propagation();
+                            }
+                        })
+                        // .on_key_down({
+                        //     let on_click = on_click.clone();
+                        //     let focus_handle = self.focus_handle.clone();
+                        //     move |event, window, cx| {
+                        //         println!("x");
+                        //         if (event.keystroke == Keystroke::parse("enter").unwrap()
+                        //             || event.keystroke == Keystroke::parse("space").unwrap())
+                        //             && focus_handle.is_focused(window)
+                        //         {
+                        //             let click_event = ClickEvent::default();
+                        //             (on_click)(&click_event, window, cx);
+                        //             window.prevent_default();
+                        //             cx.stop_propagation();
+                        //         }
+                        //     }
+                        // })
+                        .on_click({
+                            let on_click = on_click.clone();
+                            let handle = focus_handle.clone();
+                            move |event, window, cx| {
+                                handle.focus(window);
+                                (on_click)(event, window, cx);
+                            }
+                        })
+                    }
+                }
             )
             .when(focused, |this| {
                 this.shadow(

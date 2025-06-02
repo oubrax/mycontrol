@@ -14,4 +14,4 @@ pub use icon::*;
 pub use kbd::*;
 pub use styled::*;
 pub use theme::*;
-pub use focus::{focus_next, get_or_create_focus_handle, register_focusable};
+pub use focus::{focus_next, focus_previous, get_or_create_focus_handle, register_focusable};

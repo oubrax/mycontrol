@@ -1,13 +1,20 @@
 use std::rc::Rc;
 
 use crate::{
-    focus, icon::Icon, indicator::Indicator, styled::{h_flex, Disableable, Selectable, Sizable, Size, StyleSized}, theme::ActiveTheme, tooltip::Tooltip, Colorize as _
+    Colorize as _, focus,
+    icon::Icon,
+    indicator::Indicator,
+    styled::{Disableable, Selectable, Sizable, Size, StyleSized, h_flex},
+    theme::ActiveTheme,
+    tooltip::Tooltip,
 };
+use gpui::FocusHandle;
 use gpui::{
-    div, prelude::FluentBuilder as _, px, relative, Action, AnyElement, App, BoxShadow, ClickEvent, Corners, Div, Edges, ElementId, Hsla, InteractiveElement, IntoElement, Keystroke, MouseButton, ParentElement, Pixels, Point, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled, Window
+    Action, AnyElement, App, BoxShadow, ClickEvent, Corners, Div, Edges, ElementId,
+    Hsla, InteractiveElement, IntoElement, Keystroke, MouseButton, ParentElement,
+    Pixels, Point, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled, Window, div,
+    prelude::FluentBuilder as _, px, relative,
 };
-use gpui::{ FocusHandle,};
-
 
 #[derive(Clone, Copy)]
 pub enum ButtonRounded {
@@ -192,7 +199,7 @@ pub struct Button {
     pub(crate) stop_propagation: bool,
     loading: bool,
     loading_icon: Option<Icon>,
-    focus_handle: FocusHandle,
+    focus_handle: Option<FocusHandle>,
 }
 
 impl From<Button> for AnyElement {
@@ -202,9 +209,10 @@ impl From<Button> for AnyElement {
 }
 
 impl Button {
-    pub fn new(id: impl Into<ElementId>, cx: &mut App) -> Self {
+    pub fn new(id: impl Into<ElementId>) -> Self {
         let element_id = id.into();
-        let handle = focus::get_or_create_focus_handle(cx, element_id.clone());
+
+        // No longer need subscription - Enter key handling is done directly in keystroke observer
         Self {
             base: div().flex_shrink_0(),
             id: element_id,
@@ -225,7 +233,7 @@ impl Button {
             outline: false,
             children: Vec::new(),
             loading_icon: None,
-            focus_handle: handle,
+            focus_handle: None,
         }
     }
 
@@ -307,6 +315,35 @@ impl Button {
         self
     }
 
+    /// Version of on_click that automatically registers for Enter key handling
+    pub fn on_click_with_enter(
+        mut self,
+        cx: &mut App,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        use std::rc::Rc;
+        let handle = focus::get_or_create_focus_handle(cx, self.id.clone());
+        self.focus_handle = Some(handle);
+
+        // Wrap the handler in Rc so we can share it
+        let shared_handler = Rc::new(handler);
+
+        // Register a clone for Enter key handling
+        let element_id = self.id.clone();
+        let enter_handler = shared_handler.clone();
+        focus::register_button_handler(cx, element_id, Box::new(move |event, window, app| {
+            enter_handler(event, window, app);
+        }));
+
+        // Set the original handler for normal clicks
+        let click_handler = shared_handler.clone();
+        self.on_click = Some(Box::new(move |event, window, app| {
+            click_handler(event, window, app);
+        }));
+
+        self
+    }
+
     pub fn stop_propagation(mut self, val: bool) -> Self {
         self.stop_propagation = val;
         self
@@ -376,13 +413,12 @@ impl RenderOnce for Button {
             _ => self.size,
         };
 
-        let focused = self.focus_handle.is_focused(window);
+        let focused = self.focus_handle.map(|f|f.is_focused(window)).unwrap_or(false);
         let ring_color = if self.variant == ButtonVariant::Danger {
             cx.theme().danger.lighten(0.5)
         } else {
             cx.theme().ring.opacity(0.5)
         };
-
         self.base
             .id(self.id)
             .cursor_default()
@@ -394,7 +430,6 @@ impl RenderOnce for Button {
             .when(cx.theme().shadow && normal_style.shadow, |this| {
                 this.shadow_sm()
             })
-            .focusable()
             .when(!style.no_padding(), |this| {
                 if self.label.is_none() && self.children.is_empty() {
                     // Icon Button
@@ -467,26 +502,29 @@ impl RenderOnce for Button {
                 |this, on_click| {
                     let stop_propagation = self.stop_propagation;
                     let on_click = Rc::new(on_click);
-                    
+
                     this.on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         window.prevent_default();
                         if stop_propagation {
                             cx.stop_propagation();
                         }
                     })
-                    .on_key_down({
-                        let on_click = on_click.clone();
-                        let focus_handle = self.focus_handle.clone();
-                        move |event, window, cx| {
-                            println!("x");
-                            if (event.keystroke == Keystroke::parse("enter").unwrap() || event.keystroke == Keystroke::parse("space").unwrap()) && focus_handle.is_focused(window) {
-                                let click_event = ClickEvent::default();
-                                (on_click)(&click_event, window, cx);
-                                window.prevent_default();
-                                cx.stop_propagation();
-                            }
-                        }
-                    })
+                    // .on_key_down({
+                    //     let on_click = on_click.clone();
+                    //     let focus_handle = self.focus_handle.clone();
+                    //     move |event, window, cx| {
+                    //         println!("x");
+                    //         if (event.keystroke == Keystroke::parse("enter").unwrap()
+                    //             || event.keystroke == Keystroke::parse("space").unwrap())
+                    //             && focus_handle.is_focused(window)
+                    //         {
+                    //             let click_event = ClickEvent::default();
+                    //             (on_click)(&click_event, window, cx);
+                    //             window.prevent_default();
+                    //             cx.stop_propagation();
+                    //         }
+                    //     }
+                    // })
                     .on_click({
                         let on_click = on_click.clone();
                         move |event, window, cx| {
@@ -495,12 +533,18 @@ impl RenderOnce for Button {
                     })
                 },
             )
-            .when(focused, |this| this.shadow([BoxShadow {
-                blur_radius: px(0.1),
-                color: ring_color,
-                offset: Point::new(px(0.), px(0.)),
-                spread_radius: px(1.5), 
-            }].to_vec()).border_color(ring_color.alpha(0.1)))
+            .when(focused, |this| {
+                this.shadow(
+                    [BoxShadow {
+                        blur_radius: px(0.1),
+                        color: ring_color,
+                        offset: Point::new(px(0.), px(0.)),
+                        spread_radius: px(1.5),
+                    }]
+                    .to_vec(),
+                )
+                .border_color(ring_color.alpha(0.1))
+            })
             .when(self.disabled, |this| {
                 let disabled_style = style.disabled(self.outline, cx);
                 this.bg(disabled_style.bg)
@@ -549,7 +593,6 @@ impl RenderOnce for Button {
                         .build(window, cx)
                 })
             })
-            
     }
 }
 

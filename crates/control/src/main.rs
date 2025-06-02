@@ -1,13 +1,8 @@
 use gpui::{
-    App, Application, Bounds, Context, Decorations, KeyBinding, MouseButton, Pixels, SharedString,
-    Window, WindowBounds, WindowDecorations, WindowOptions, actions, div, hsla, prelude::*, px,
-    rems, rgb, size, transparent_black,
+    actions, div, hsla, prelude::*, px, rems, rgb, size, transparent_black, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, KeyBinding, MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
 use ui::{
-    Button, ButtonVariants,
-    colors::{self, Colorize},
-    focus,
-    theme::{self, ActiveTheme, Theme, ThemeColor, ThemeMode, hsl},
+    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, Button, ButtonVariants
 };
 
 actions!(main_app, [FocusNext]);
@@ -22,7 +17,7 @@ impl Render for Titlebar {
         let title_bar_height = rems(3.); // Approximate height
         let title_bar_bg = cx.theme().background; // Dark background
         let title_bar_text_color = cx.theme().foreground; // Light text
-
+        
         div()
             .id("simple-titlebar")
             .w_full() // Take full width
@@ -61,8 +56,11 @@ impl Render for Titlebar {
     }
 }
 
+
 // --- Main Application View ---
-struct MainApp {}
+pub struct MainApp {}
+
+impl EventEmitter<EnterFocusEvent> for MainApp {}
 
 impl Render for MainApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -91,9 +89,30 @@ impl Render for MainApp {
                     .gap_2()
                     .justify_center()
                     .items_center()
-                    .child(Button::new("button1", cx).label("Solid").primary())
-                    .child(Button::new("button2", cx).label("Outline").outline())
-                    .child(Button::new("button3",cx).label("Destructive").danger())
+                    .child(
+                        Button::new("button1")
+                            .label("Solid")
+                            .primary()
+                            .on_click_with_enter(cx, |_, _, _| {
+                                println!("Solid button clicked!");
+                            })
+                    )
+                    .child(
+                        Button::new("button2")
+                            .label("Outline")
+                            .outline()
+                            .on_click_with_enter(cx, |_, _, _| {
+                                println!("Outline button clicked!");
+                            })
+                    )
+                    .child(
+                        Button::new("button3")
+                            .label("Destructive")
+                            .danger()
+                            .on_click_with_enter(cx, |_, _, _| {
+                                println!("Destructive button clicked!");
+                            })
+                    )
 
             )
     }
@@ -300,8 +319,17 @@ fn main() {
         cx.bind_keys(vec![KeyBinding::new("tab", FocusNext, None)]);
         cx.observe_keystrokes(|event, window, app| {
             if event.keystroke.key == "tab".to_string() {
-                println!("bruh");
-                focus::focus_next(window, app);
+                if event.keystroke.modifiers.shift {
+                    println!("Shift+Tab pressed - focusing previous");
+                    focus::focus_previous(window, app);
+                } else {
+                    println!("Tab pressed - focusing next");
+                    focus::focus_next(window, app);
+                }
+            }
+            else if event.keystroke.key == "enter" {
+                // Handle Enter key press directly with window context
+                focus::handle_enter_focus_event_with_window(window, app);
             }
         })
         .detach();
@@ -324,9 +352,10 @@ fn main() {
             },
             |window, cx| {
                 theme::init(cx, &t);
-                focus::init(cx);
                 Theme::change(ThemeMode::Dark, None, cx);
-                cx.new(|_| MainApp {})
+                let entity = cx.new(|_| MainApp {});
+                focus::init(cx, entity.clone().into());
+                entity
             },
         )
         .unwrap();

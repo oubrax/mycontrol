@@ -508,7 +508,7 @@ impl RenderOnce for Button {
             .when_some(
                 self.on_click.filter(|_| !self.disabled && !self.loading),
                 {
-                    let focus_handle = self.focus_handle.unwrap();
+                    let focus_handle = &self.focus_handle;
                     move |this, on_click| {
                         let stop_propagation = self.stop_propagation;
                         let on_click = Rc::new(on_click);
@@ -539,7 +539,7 @@ impl RenderOnce for Button {
                             let on_click = on_click.clone();
                             let handle = focus_handle.clone();
                             move |event, window, cx| {
-                                handle.focus(window);
+                                handle.clone().map(|x|x.focus(window)).unwrap();
                                 (on_click)(event, window, cx);
                             }
                         })

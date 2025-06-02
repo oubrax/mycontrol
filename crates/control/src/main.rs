@@ -103,11 +103,9 @@ impl Render for MainApp {
                     )
                     .child(
                         Button::new("button2")
-                            .label("Outline")
+                            .label("No focus")
                             .outline()
-                            .on_click_with_enter(cx, |_, _, _| {
-                                println!("Outline button clicked!");
-                            })
+                            
                     )
                     .child(
                         Button::new("button3")

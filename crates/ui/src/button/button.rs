@@ -8,7 +8,7 @@ use crate::{
     theme::ActiveTheme,
     tooltip::Tooltip,
 };
-use gpui::FocusHandle;
+use gpui::{transparent_white, FocusHandle};
 use gpui::{
     Action, AnyElement, App, BoxShadow, ClickEvent, Corners, Div, Edges, ElementId, Hsla,
     InteractiveElement, IntoElement, Keystroke, MouseButton, ParentElement, Pixels, Point,
@@ -212,7 +212,6 @@ impl Button {
     pub fn new(id: impl Into<ElementId>) -> Self {
         let element_id = id.into();
 
-        // No longer need subscription - Enter key handling is done directly in keystroke observer
         Self {
             base: div().flex_shrink_0(),
             id: element_id,
@@ -233,8 +232,42 @@ impl Button {
             outline: false,
             children: Vec::new(),
             loading_icon: None,
-            focus_handle: None,
+            focus_handle: None, // Will be created when needed
         }
+    }
+
+    /// Create a focus handle for this button if it doesn't already have one.
+    /// This is called automatically when on_click is set.
+    fn ensure_focus_handle(&mut self, cx: &mut App) {
+        if self.focus_handle.is_none() {
+            let handle = focus::get_or_create_focus_handle(cx, self.id.clone());
+            self.focus_handle = Some(handle);
+        }
+    }
+
+    /// Create a priority focus handle for this button if it doesn't already have one.
+    /// This ensures the button will be focused first in the tab order.
+    fn ensure_priority_focus_handle(&mut self, cx: &mut App) {
+        if self.focus_handle.is_none() {
+            let handle = focus::get_or_create_focus_handle_with_priority(cx, self.id.clone());
+            self.focus_handle = Some(handle);
+        }
+    }
+
+    /// Create a focus handle with a specific priority index for this button if it doesn't already have one.
+    /// This ensures the button will be focused at the specified position in the tab order.
+    fn ensure_focus_handle_with_index(&mut self, cx: &mut App, priority_index: usize) {
+        if self.focus_handle.is_none() {
+            let handle = focus::get_or_create_focus_handle_with_index(cx, self.id.clone(), priority_index);
+            self.focus_handle = Some(handle);
+        }
+    }
+
+    /// Remove focus capability from this button.
+    /// Call this if you don't want the button to be focusable.
+    pub fn not_focusable(mut self) -> Self {
+        self.focus_handle = None;
+        self
     }
 
     /// Set the outline style of the Button.
@@ -309,21 +342,13 @@ impl Button {
 
     pub fn on_click(
         mut self,
-        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_click = Some(Box::new(handler));
-        self
-    }
-
-    /// Version of on_click that automatically registers for Enter key handling
-    pub fn on_click_with_enter(
-        mut self,
         cx: &mut App,
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
         use std::rc::Rc;
-        let handle = focus::get_or_create_focus_handle(cx, self.id.clone());
-        self.focus_handle = Some(handle);
+
+        // Ensure this button has a focus handle (makes it focusable by default)
+        self.ensure_focus_handle(cx);
 
         // Wrap the handler in Rc so we can share it
         let shared_handler = Rc::new(handler);
@@ -346,6 +371,85 @@ impl Button {
         }));
 
         self
+    }
+
+    /// Set the click handler with priority focus (will be focused first in tab order)
+    pub fn on_click_with_priority(
+        mut self,
+        cx: &mut App,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        use std::rc::Rc;
+
+        // Ensure this button has a priority focus handle
+        self.ensure_priority_focus_handle(cx);
+
+        // Wrap the handler in Rc so we can share it
+        let shared_handler = Rc::new(handler);
+
+        // Register a clone for Enter key handling
+        let element_id = self.id.clone();
+        let enter_handler = shared_handler.clone();
+        focus::register_button_handler(
+            cx,
+            element_id,
+            Box::new(move |event, window, app| {
+                enter_handler(event, window, app);
+            }),
+        );
+
+        // Set the original handler for normal clicks
+        let click_handler = shared_handler.clone();
+        self.on_click = Some(Box::new(move |event, window, app| {
+            click_handler(event, window, app);
+        }));
+
+        self
+    }
+
+    /// Set the click handler with a specific priority index in the focus order
+    pub fn on_click_with_index(
+        mut self,
+        cx: &mut App,
+        priority_index: usize,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        use std::rc::Rc;
+
+        // Ensure this button has a focus handle with the specified index
+        self.ensure_focus_handle_with_index(cx, priority_index);
+
+        // Wrap the handler in Rc so we can share it
+        let shared_handler = Rc::new(handler);
+
+        // Register a clone for Enter key handling
+        let element_id = self.id.clone();
+        let enter_handler = shared_handler.clone();
+        focus::register_button_handler(
+            cx,
+            element_id,
+            Box::new(move |event, window, app| {
+                enter_handler(event, window, app);
+            }),
+        );
+
+        // Set the original handler for normal clicks
+        let click_handler = shared_handler.clone();
+        self.on_click = Some(Box::new(move |event, window, app| {
+            click_handler(event, window, app);
+        }));
+
+        self
+    }
+
+    /// Legacy method for backwards compatibility - now just calls on_click
+    /// @deprecated Use on_click instead, which now automatically handles Enter key
+    pub fn on_click_with_enter(
+        self,
+        cx: &mut App,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_click(cx, handler)
     }
 
     pub fn stop_propagation(mut self, val: bool) -> Self {
@@ -422,11 +526,7 @@ impl RenderOnce for Button {
             .clone()
             .map(|f| f.is_focused(window))
             .unwrap_or(false);
-        let ring_color = if self.variant == ButtonVariant::Danger {
-            cx.theme().danger.lighten(0.5).opacity(0.1)
-        } else {
-            cx.theme().ring.opacity(0.1)
-        };
+
         self.base
             .id(self.id)
             .cursor_default()
@@ -494,8 +594,13 @@ impl RenderOnce for Button {
                     .when(normal_style.underline, |this| this.text_decoration_1())
                     .hover(|this| {
                         let hover_style = style.hovered(self.outline, cx);
+                        let border_color = if focused {
+                            cx.theme().ring
+                        } else {
+                            hover_style.border
+                        };
                         this.bg(hover_style.bg)
-                            .border_color(hover_style.border)
+                            .border_color(border_color)
                             .text_color(crate::red_400())
                     })
                     .active(|this| {
@@ -547,24 +652,7 @@ impl RenderOnce for Button {
                 }
             )
             .when(focused, |this| {
-                this.shadow(
-                    [
-                        BoxShadow {
-                            blur_radius: px(0.5),
-                            color: ring_color,
-                            offset: Point::new(px(0.), px(0.)),
-                            spread_radius: px(3.5),
-                        },
-                        BoxShadow {
-                            blur_radius: px(0.5),
-                            color: cx.theme().background,
-                            offset: Point::new(px(0.), px(0.)),
-                            spread_radius: px(1.5),
-                        },
-                    ]
-                    .to_vec(),
-                )
-                .border_color(ring_color.alpha(0.1))
+                this.border_2().border_color(cx.theme().ring)
             })
             .when(self.disabled, |this| {
                 let disabled_style = style.disabled(self.outline, cx);
@@ -572,6 +660,9 @@ impl RenderOnce for Button {
                     .text_color(disabled_style.fg)
                     .border_color(disabled_style.border)
                     .shadow_none()
+            })
+            .on_mouse_down_out( |_, win, _cx| {
+                focus::unfocus_all(win);
             })
             .child({
                 h_flex()

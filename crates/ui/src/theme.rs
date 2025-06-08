@@ -3,6 +3,8 @@ use std::ops::{Deref, DerefMut};
 use gpui::{
     App, BoxShadow, Global, Hsla, Pixels, SharedString, Window, WindowAppearance, hsla, point,
 };
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 use crate::scroll::ScrollbarShow;
 
@@ -333,7 +335,8 @@ impl Theme {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ThemeMode {
     Light,
     #[default]

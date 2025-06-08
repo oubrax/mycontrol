@@ -1,122 +1,130 @@
 use gpui::{
-    actions, div, hsla, prelude::*, px, rems, rgb, size, transparent_black, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, KeyBinding, MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
+    AnyView, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, Focusable,
+    MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions, div,
+    hsla, prelude::*, px, size, transparent_black,
 };
 use ui::{
-    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, Button, ButtonVariants
+    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputState, TextInput}, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, Root, StyledExt, TitleBar
 };
-
-actions!(main_app, [FocusNext]);
 
 const ROUNDED_SIZE: Pixels = px(15.);
 
-struct Titlebar;
+// --- Control Root Structure ---
+struct ControlRoot {
+    title_bar: Entity<ControlTitleBar>,
+    view: AnyView,
+}
 
-impl Render for Titlebar {
+impl ControlRoot {
+    pub fn new(
+        title: impl Into<SharedString>,
+        view: impl Into<AnyView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let title_bar = cx.new(|cx| ControlTitleBar::new(title, window, cx));
+        Self {
+            title_bar,
+            view: view.into(),
+        }
+    }
+}
+
+impl Render for ControlRoot {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex()
+            .size_full()
+            .rounded(ROUNDED_SIZE)
+            // .border_1()
+            // .border_color(cx.theme().border)
+            .child(self.title_bar.clone())
+            .child(div().flex_1().overflow_hidden().child(self.view.clone()))
+    }
+}
+
+// --- Control Title Bar ---
+struct ControlTitleBar {
+    title: SharedString,
+}
+
+impl ControlTitleBar {
+    pub fn new(
+        title: impl Into<SharedString>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Self {
+        Self {
+            title: title.into(),
+        }
+    }
+}
+
+impl Render for ControlTitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Basic styling inspired by Zed's title bar
-        let title_bar_height = rems(3.); // Approximate height
-        let title_bar_bg = cx.theme().background; // Dark background
-        let title_bar_text_color = cx.theme().foreground; // Light text
-        
-        div()
-            .id("simple-titlebar")
-            .w_full() // Take full width
-            .h(title_bar_height) // Set fixed height
-            .bg(title_bar_bg) // Set background color
-            // Apply top rounding if the window isn't tiled at the top corners
-            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.top || tiling.left)), |el| {
-                el.rounded_tl(ROUNDED_SIZE)
-            })
-            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.top || tiling.right)), |el| {
-                el.rounded_tr(ROUNDED_SIZE)
-            })
-            .flex() // Use flexbox for internal layout
-            .items_center() // Center items vertically
-            .pl_2() // Add left padding
+        TitleBar::new()
             .child(
                 div()
-                    .id("hey")
-                    .child("Control")
-                    .text_color(title_bar_text_color)
-                    .on_mouse_up(MouseButton::Left, |_, win, cx| {
-                        println!("meow");
-
-
-                        match cx.theme().is_dark() {
-                            true => Theme::change(ThemeMode::Light, Some(win), cx),
-                            false => Theme::change(ThemeMode::Dark, Some(win), cx),
-                        }
-                    })
+                    .id("title-text")
+                    .child(self.title.clone())
+                    .text_color(cx.theme().foreground)
             )
-            // Make the title bar draggable
-
-            .on_mouse_down(gpui::MouseButton::Left, |_, win, _| {
-                win.start_window_move(); // Allows dragging the window by the title bar
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
+                el.rounded_tl(ROUNDED_SIZE)
+            })
+            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.right)), |el| {
+                el.rounded_tr(ROUNDED_SIZE)
             })
     }
 }
 
-
 // --- Main Application View ---
-pub struct MainApp {}
+pub struct MainApp {
+    textarea: Entity<InputState>,
+}
+
+impl MainApp {
+    fn new(window: &mut Window, cx: &mut App) -> Self {
+        let m = MainApp {
+            textarea: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("Describe your task")
+                    .multi_line()
+                    .auto_grow(3, 6)
+                    
+            }),
+        };
+
+        focus::register_focusable(cx, "textarea_main".into(), m.textarea.focus_handle(cx));
+        m
+    }
+}
 
 impl EventEmitter<EnterFocusEvent> for MainApp {}
 
 impl Render for MainApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Main container using vertical flex to stack title bar and content
+        // Content area without title bar (title bar will be handled by ControlRoot)
         div()
             .id("main_app")
+            .size_full()
+            .bg(cx.theme().background)
             .flex()
             .flex_col()
-            .size_full() // Fill the entire window
-            .child(cx.new(|_| Titlebar {}))
+            .gap_2()
+            .justify_center()
+            .items_center()
+            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
+                el.rounded_bl(ROUNDED_SIZE)
+            })
+            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.right)), |el| {
+                el.rounded_br(ROUNDED_SIZE)
+            })
+            .p_5()
 
-            .child(
-                // Original content area
-                div()
-                    .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
-                        el.rounded_bl(ROUNDED_SIZE)
-                    })
-                    .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.right)), |el| {
-                        el.rounded_br(ROUNDED_SIZE)
-                    })
-                    .bg(cx.theme().background) // Background for the content area
-                    .flex_grow() // Allow this area to fill the remaining vertical space
-                    .w_full() // Take full width
-                    .flex() // Use flex to center the text
-                    .flex_col()
-                    .gap_2()
-                    .justify_center()
-                    .items_center()
-                    .on_mouse_down(MouseButton::Left, |_, window, _| {
-                        // Unfocus all elements when clicking on empty space
-                        focus::unfocus_all(window);
-                    })
-                    .child(
-                        Button::new("button1")
-                            .label("Solid")
-                            .primary()
-                            .on_click_with_enter(cx, |_, _, _| {
-                                println!("Solid button clicked!");
-                            })
-                    )
-                    .child(
-                        Button::new("button2")
-                            .label("No focus")
-                            .outline()
-                            
-                    )
-                    .child(
-                        Button::new("button3")
-                            .label("Destructive")
-                            .danger()
-                            .on_click_with_enter(cx, |_, _, _| {
-                                println!("Destructive button clicked!");
-                            })
-                    )
-
-            )
+            .child(TextInput::new(&self.textarea))
+            // .child(Button::new("meow").label("Meow button").on_click(cx, |_, _window, _cx| println!("clicked")))
     }
 }
 
@@ -255,7 +263,7 @@ fn main() {
         primary_foreground: hsl(223.0, 5.9, 10.0),
         primary_hover: hsl(223.0, 0.0, 90.0),
         progress_bar: hsl(223.0, 0.0, 98.0),
-        ring: hsl(240.0, 4.9, 83.9),
+        ring: hsl(240.0, 4.9, 40.9),
         scrollbar: hsl(240.0, 0.0, 10.0).opacity(0.95),
         scrollbar_thumb: hsl(0., 0., 48.).opacity(0.9),
         scrollbar_thumb_hover: hsl(0., 0., 68.),
@@ -317,51 +325,62 @@ fn main() {
         scrollbar_show: ui::scroll::ScrollbarShow::Scrolling,
     };
 
-    Application::new().run(move |cx: &mut crate::App| {
-        cx.bind_keys(vec![KeyBinding::new("tab", FocusNext, None)]);
-        cx.observe_keystrokes(|event, window, app| {
-            if event.keystroke.key == "tab".to_string() {
-                if event.keystroke.modifiers.shift {
-                    println!("Shift+Tab pressed - focusing previous");
-                    focus::focus_previous(window, app);
-                } else {
-                    println!("Tab pressed - focusing next");
-                    focus::focus_next(window, app);
+    Application::new()
+        .with_assets(Assets)
+        .run(move |cx: &mut crate::App| {
+            cx.observe_keystrokes(|event, window, app| {
+                println!("pressed {:?}", event.keystroke);
+                if event.keystroke.key == "tab".to_string() {
+                    if event.keystroke.modifiers.shift {
+                        println!("Shift+Tab pressed - focusing previous");
+                        focus::focus_previous(window, app);
+                    } else {
+                        println!("Tab pressed - focusing next");
+                        focus::focus_next(window, app);
+                    }
+                } else if event.keystroke.key == "enter" {
+                    // Handle Enter key press directly with window context
+                    focus::handle_enter_focus_event_with_window(window, app);
                 }
-            }
-            else if event.keystroke.key == "enter" {
-                // Handle Enter key press directly with window context
-                focus::handle_enter_focus_event_with_window(window, app);
-            }
-        })
-        .detach();
-        // Define initial window size and position
-        let initial_size = size(px(1024.), px(500.));
-        let bounds = Bounds::centered(None, initial_size, cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                is_movable: true,
-                kind: gpui::WindowKind::Normal,
-                window_background: gpui::WindowBackgroundAppearance::Transparent,
-                focus: true,
-                titlebar: None,
+            })
+            .detach();
+            // Define initial window size and position
+            let initial_size = size(px(1024.), px(500.));
+            let bounds = Bounds::centered(None, initial_size, cx);
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    is_movable: true,
+                    kind: gpui::WindowKind::Normal,
+                    window_background: gpui::WindowBackgroundAppearance::Transparent,
+                    focus: true,
+                    titlebar: Some(TitleBar::title_bar_options()),
 
-                app_id: Some("Control".into()),
-                window_decorations: Some(WindowDecorations::Client), // IMPORTANT: Enable client-side decorations
-                // -------------------------------------
-                ..Default::default()
-            },
-            |window, cx| {
-                theme::init(cx, &t);
-                Theme::change(ThemeMode::Dark, None, cx);
-                let entity = cx.new(|_| MainApp {});
-                focus::init(cx, entity.clone().into());
-                entity
-            },
-        )
-        .unwrap();
+                    app_id: Some("Control".into()),
+                    window_decorations: Some(WindowDecorations::Client), // IMPORTANT: Enable client-side decorations
+                    // -------------------------------------
+                    ..Default::default()
+                },
+                |window, cx| {
+                    theme::init(cx, &t);
+                    highlighter::init(cx);
+                    input::init(cx);
+                    Theme::change(ThemeMode::Dark, None, cx);
 
-        cx.activate(true); // Activate the application
-    });
+                    focus::init(cx);
+                    // Create the main app view
+                    let main_app = cx.new(|cx| MainApp::new(window, cx));
+
+                    // Create the control root with title bar
+                    let control_root =
+                        cx.new(|cx| ControlRoot::new("Control", main_app.clone(), window, cx));
+
+                    // Wrap everything in the Root component for modal/drawer/notification support
+                    cx.new(|cx| Root::new(control_root.into(), window, cx))
+                },
+            )
+            .unwrap();
+
+            cx.activate(true); // Activate the application
+        });
 }

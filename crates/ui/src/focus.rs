@@ -6,16 +6,14 @@ type ButtonClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'stat
 pub struct FocusRegistry {
     pub handles: HashMap<ElementId, FocusHandle>,
     pub order: Vec<ElementId>,
-    pub main_entity: AnyEntity,
     pub button_handlers: HashMap<ElementId, ButtonClickHandler>,
 }
 
 impl FocusRegistry {
-    pub fn new(entity: AnyEntity) -> Self {
+    pub fn new() -> Self {
         Self {
             handles: HashMap::new(),
             order: Vec::new(),
-            main_entity: entity,
             button_handlers: HashMap::new(),
         }
     }
@@ -23,8 +21,8 @@ impl FocusRegistry {
 
 impl Global for FocusRegistry {}
 
-pub fn init(cx: &mut App, entity: AnyEntity) {
-    cx.set_global(FocusRegistry::new(entity));
+pub fn init(cx: &mut App) {
+    cx.set_global(FocusRegistry::new());
 }
 
 /// Register a button's click handler
@@ -96,6 +94,35 @@ pub fn register_focusable(cx: &mut App, element_id: ElementId, handle: FocusHand
     registry.handles.insert(element_id, handle);
 }
 
+/// Register a focusable element with priority (at the beginning of the focus order).
+/// This ensures the element will be focused first when tabbing.
+pub fn register_focusable_with_priority(cx: &mut App, element_id: ElementId, handle: FocusHandle) {
+    let registry = cx.global_mut::<FocusRegistry>();
+
+    // If this ElementId doesn't exist in our order, add it at the beginning
+    if !registry.handles.contains_key(&element_id) {
+        registry.order.insert(0, element_id.clone());
+    }
+
+    // Insert or replace the handle for this ElementId
+    registry.handles.insert(element_id, handle);
+}
+
+/// Register a focusable element with a specific priority index.
+/// Lower indices have higher priority (will be focused first).
+pub fn register_focusable_with_index(cx: &mut App, element_id: ElementId, handle: FocusHandle, priority_index: usize) {
+    let registry = cx.global_mut::<FocusRegistry>();
+
+    // If this ElementId doesn't exist in our order, add it at the specified index
+    if !registry.handles.contains_key(&element_id) {
+        let insert_index = priority_index.min(registry.order.len());
+        registry.order.insert(insert_index, element_id.clone());
+    }
+
+    // Insert or replace the handle for this ElementId
+    registry.handles.insert(element_id, handle);
+}
+
 /// Get or create a FocusHandle for the given ElementId.
 /// This ensures each ElementId has exactly one unique FocusHandle.
 pub fn get_or_create_focus_handle(cx: &mut App, element_id: ElementId) -> FocusHandle {
@@ -113,9 +140,38 @@ pub fn get_or_create_focus_handle(cx: &mut App, element_id: ElementId) -> FocusH
     handle
 }
 
-pub fn main_entity(cx: &mut App) -> AnyEntity {
-    let registry = cx.global::<FocusRegistry>();
-    registry.main_entity.clone()
+/// Get or create a FocusHandle for the given ElementId with priority.
+/// This ensures each ElementId has exactly one unique FocusHandle and will be focused first.
+pub fn get_or_create_focus_handle_with_priority(cx: &mut App, element_id: ElementId) -> FocusHandle {
+    // Check if we already have a handle for this ElementId
+    {
+        let registry = cx.global::<FocusRegistry>();
+        if let Some(handle) = registry.handles.get(&element_id) {
+            return handle.clone();
+        }
+    }
+
+    // Create a new handle and register it with priority
+    let handle = cx.focus_handle();
+    register_focusable_with_priority(cx, element_id, handle.clone());
+    handle
+}
+
+/// Get or create a FocusHandle for the given ElementId with a specific priority index.
+/// This ensures each ElementId has exactly one unique FocusHandle and will be focused at the specified position.
+pub fn get_or_create_focus_handle_with_index(cx: &mut App, element_id: ElementId, priority_index: usize) -> FocusHandle {
+    // Check if we already have a handle for this ElementId
+    {
+        let registry = cx.global::<FocusRegistry>();
+        if let Some(handle) = registry.handles.get(&element_id) {
+            return handle.clone();
+        }
+    }
+
+    // Create a new handle and register it with the specified index
+    let handle = cx.focus_handle();
+    register_focusable_with_index(cx, element_id, handle.clone(), priority_index);
+    handle
 }
 
 pub fn focus_next(window: &mut Window, cx: &mut App) {
@@ -188,7 +244,6 @@ pub fn focus_previous(window: &mut Window, cx: &mut App) {
 
 /// Unfocus all elements by blurring the window
 pub fn unfocus_all(window: &mut Window) {
-    println!("Unfocusing all elements");
     window.blur();
 }
 

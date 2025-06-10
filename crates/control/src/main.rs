@@ -123,7 +123,7 @@ impl Render for MainApp {
             })
             .p_5()
 
-            .child(TextInput::new(&self.textarea))
+            .child(TextInput::new(&self.textarea).h(px(80.)))
             // .child(Button::new("meow").label("Meow button").on_click(cx, |_, _window, _cx| println!("clicked")))
     }
 }

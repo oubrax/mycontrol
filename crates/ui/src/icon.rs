@@ -192,12 +192,12 @@ impl RenderOnce for IconName {
 
 #[derive(IntoElement)]
 pub struct Icon {
-    base: Svg,
-    style: StyleRefinement,
-    path: SharedString,
-    text_color: Option<Hsla>,
-    size: Option<Size>,
-    rotation: Option<Radians>,
+    pub base: Svg,
+    pub style: StyleRefinement,
+    pub path: SharedString,
+    pub text_color: Option<Hsla>,
+    pub size: Option<Size>,
+    pub rotation: Option<Radians>,
 }
 
 impl Default for Icon {

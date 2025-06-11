@@ -1,10 +1,16 @@
 use gpui::{
     AnyView, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, Focusable,
     MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions, div,
-    hsla, prelude::*, px, size, transparent_black,
+    hsla, prelude::*, px, size, svg, transparent_black,
 };
 use ui::{
-    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputState, TextInput}, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, Root, StyledExt, TitleBar
+    Assets, Button, Icon, IconName, Root, StyledExt, TitleBar,
+    colors::{self, Colorize},
+    focus::{self, EnterFocusEvent},
+    highlighter,
+    input::{self, InputState, TextInput},
+    theme::{self, ActiveTheme, Theme, ThemeColor, ThemeMode, hsl},
+    v_flex,
 };
 
 const ROUNDED_SIZE: Pixels = px(15.);
@@ -92,7 +98,6 @@ impl MainApp {
                     .placeholder("Describe your task")
                     .multi_line()
                     .auto_grow(3, 6)
-                    
             }),
         };
 
@@ -106,6 +111,14 @@ impl EventEmitter<EnterFocusEvent> for MainApp {}
 impl Render for MainApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Content area without title bar (title bar will be handled by ControlRoot)
+        let textinput = TextInput::new(&self.textarea).h(px(70.));
+        let bg = if textinput.state.read(cx).is_disabled() {
+            cx.theme().muted
+        } else {
+            cx.theme().background
+        };
+        let appearance = textinput.appearance;
+        let bordered = textinput.bordered;
         div()
             .id("main_app")
             .size_full()
@@ -123,8 +136,42 @@ impl Render for MainApp {
             })
             .p_5()
 
-            .child(TextInput::new(&self.textarea).h(px(80.)))
-            // .child(Button::new("meow").label("Meow button").on_click(cx, |_, _window, _cx| println!("clicked")))
+            .child(
+            div()
+                .items_center()
+                .h_12()
+                .child(
+                    textinput
+                )
+                .child(
+                    div()
+                        .flex()
+                        .rounded_b(cx.theme().radius)
+                        .items_center()
+                        .justify_between()
+                        .size_full()
+                        .p_3()
+                        .gap_2()
+                        .h_12()
+                        .when(appearance, |this| {
+                            this.bg(bg)
+                                .when(bordered, |this| {
+                                    this.border_color(cx.theme().input)
+                                        .border_1()
+                                        .border_t_0()
+                                        .when(cx.theme().shadow, |this| this.shadow_sm())
+                                        .when(self.textarea.read(cx).focus_handle(cx).is_focused(window), |this| this.focused_border(cx))
+                                })
+                        })
+                        .child(
+                            Button::new("Path").icon(Icon::default().path(IconName::ArrowUp.path())).label("/home/oubra")
+                        )
+                        .child(
+                            Button::new("Submit").icon(Icon::default().path(IconName::ArrowUp.path())).px_0()
+                        )
+            )
+        )
+        // .child(Button::new("meow").label("Meow button").on_click(cx, |_, _window, _cx| println!("clicked")))
     }
 }
 

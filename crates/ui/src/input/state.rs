@@ -1055,7 +1055,7 @@ impl InputState {
 
         let offset = self.next_boundary(self.cursor_offset());
         // ignore if offset is "\n"
-        if self
+        if offset > 0 && self
             .text_for_range(
                 self.range_to_utf16(&(offset - 1..offset)),
                 &mut None,

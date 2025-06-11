@@ -28,6 +28,7 @@ pub struct TextInput {
     mask_toggle: bool,
     disabled: bool,
     pub bordered: bool,
+    
 }
 
 impl Sizable for TextInput {

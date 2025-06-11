@@ -1,16 +1,8 @@
 use gpui::{
-    AnyView, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, Focusable,
-    MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions, div,
-    hsla, prelude::*, px, size, svg, transparent_black,
+    div, hsla, prelude::*, px, size, svg, transparent_black, AnyView, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, Focusable, Font, MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
 use ui::{
-    Assets, Button, Icon, IconName, Root, StyledExt, TitleBar,
-    colors::{self, Colorize},
-    focus::{self, EnterFocusEvent},
-    highlighter,
-    input::{self, InputState, TextInput},
-    theme::{self, ActiveTheme, Theme, ThemeColor, ThemeMode, hsl},
-    v_flex,
+    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputState, TextInput}, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, Icon, IconName, Root, Sizable, Size, StyledExt, TitleBar
 };
 
 const ROUNDED_SIZE: Pixels = px(15.);
@@ -97,11 +89,12 @@ impl MainApp {
                 InputState::new(window, cx)
                     .placeholder("Describe your task")
                     .multi_line()
-                    .auto_grow(3, 6)
+                    .auto_grow(3, 9)
             }),
         };
 
         focus::register_focusable(cx, "textarea_main".into(), m.textarea.focus_handle(cx));
+        m.textarea.focus_handle(cx).focus(window);
         m
     }
 }
@@ -111,14 +104,13 @@ impl EventEmitter<EnterFocusEvent> for MainApp {}
 impl Render for MainApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Content area without title bar (title bar will be handled by ControlRoot)
-        let textinput = TextInput::new(&self.textarea).h(px(70.));
+        let textinput = TextInput::new(&self.textarea).bordered(false);
         let bg = if textinput.state.read(cx).is_disabled() {
             cx.theme().muted
         } else {
             cx.theme().background
         };
         let appearance = textinput.appearance;
-        let bordered = textinput.bordered;
         div()
             .id("main_app")
             .size_full()
@@ -134,15 +126,23 @@ impl Render for MainApp {
             .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.right)), |el| {
                 el.rounded_br(ROUNDED_SIZE)
             })
-            .p_5()
-
+            .p_8()
+        
             .child(
             div()
-                .items_center()
-                .h_12()
                 .child(
                     textinput
                 )
+                .pb(px(10.))
+                .rounded(cx.theme().radius)
+                .when(appearance, |this| {
+                    this.bg(bg)
+                      .border_color(cx.theme().input)
+                      .border_1()
+                      .when(cx.theme().shadow, |this| this.shadow_sm())
+                      .when(self.textarea.read(cx).focus_handle(cx).is_focused(window), |this| this.focused_border(cx))
+                })
+                
                 .child(
                     div()
                         .flex()
@@ -150,24 +150,13 @@ impl Render for MainApp {
                         .items_center()
                         .justify_between()
                         .size_full()
-                        .p_3()
                         .gap_2()
-                        .h_12()
-                        .when(appearance, |this| {
-                            this.bg(bg)
-                                .when(bordered, |this| {
-                                    this.border_color(cx.theme().input)
-                                        .border_1()
-                                        .border_t_0()
-                                        .when(cx.theme().shadow, |this| this.shadow_sm())
-                                        .when(self.textarea.read(cx).focus_handle(cx).is_focused(window), |this| this.focused_border(cx))
-                                })
-                        })
+                        .px(px(10.))
                         .child(
-                            Button::new("Path").icon(Icon::default().path(IconName::ArrowUp.path())).label("/home/oubra")
+                            Button::new("Path").outline().icon(IconName::Folder).compact().label("/home/oubra")
                         )
                         .child(
-                            Button::new("Submit").icon(Icon::default().path(IconName::ArrowUp.path())).px_0()
+                            Button::new("Submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.)))
                         )
             )
         )
@@ -363,7 +352,7 @@ fn main() {
         colors: light,
         radius: px(10.),
         shadow: false,
-        font_family: "Cantrell".into(),
+        font_family: "Geist".into(),
         font_size: px(15.),
         tile_grid_size: px(4.),
         tile_shadow: false,

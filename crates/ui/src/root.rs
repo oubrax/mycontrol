@@ -414,7 +414,7 @@ impl Render for Root {
                 .id("root")
                 .relative()
                 .size_full()
-                .font_family(".SystemUIFont")
+                .font_family(cx.theme().font_family.clone())
                 .bg(cx.theme().background)
                 .rounded(px(15.))
                 .text_color(cx.theme().foreground)

@@ -1,9 +1,12 @@
+use std::path::PathBuf;
+
 use gpui::{
-    div, hsla, prelude::*, px, size, svg, transparent_black, AnyView, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, Focusable, Font, MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
+    div, hsla, prelude::*, px, rems, size, svg, transparent_black, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, Font, MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
 use native_dialog::DialogBuilder;
+use rfd::FileDialog;
 use ui::{
-    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, Sizable, Size, StyledExt, TitleBar
+    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, Sizable, Size, StyledExt, TitleBar
 };
 
 const ROUNDED_SIZE: Pixels = px(15.);
@@ -94,6 +97,7 @@ impl Render for ControlTitleBar {
 // --- Main Application View ---
 pub struct MainApp {
     textarea: Entity<InputState>,
+    working_dir: Option<PathBuf>,
 }
 
 impl MainApp {
@@ -105,12 +109,20 @@ impl MainApp {
                     .multi_line()
                     .auto_grow(3, 6)
             }),
+            working_dir: None,
         };
 
         focus::register_focusable(cx, "textarea_main".into(), m.textarea.focus_handle(cx));
         m.textarea.focus_handle(cx).focus(window);
+
+        cx.subscribe(&m.textarea, |i, e: &InputEvent, cx| {
+            if matches!(e, InputEvent::PressEnter { secondary: true }) {
+                dbg!("Submit triggered");
+            }
+        }).detach();
         m
     }
+
 }
 
 impl EventEmitter<EnterFocusEvent> for MainApp {}
@@ -125,6 +137,18 @@ impl Render for MainApp {
             cx.theme().background
         };
         let appearance = textinput.appearance;
+        let on_file_click = cx.listener(|this, _event: &ClickEvent, window, cx| {
+            match FileDialog::new().pick_folder() {
+                    None => {
+                        window.push_notification(Notification::error("Please select a folder."), cx)
+                    },
+                    Some(p) => {
+                        if p.to_str().unwrap_or("") != "" {
+                            this.working_dir = Some(p);
+                        }
+                    }
+            }
+        });
         div()
             .id("main_app")
             .size_full()
@@ -146,6 +170,7 @@ impl Render for MainApp {
             )
             .child(
                 div()
+                .max_w(rems(64.))
                     .child(
                         textinput
                     )
@@ -169,17 +194,9 @@ impl Render for MainApp {
                             .gap_2()
                             .px(px(10.))
                             .child(
-                                Button::new("working_dir").outline().icon(IconName::Folder).compact().label("/home/oubra").on_click(cx, |_, window, cx| {
-                                    match DialogBuilder::file().open_single_dir().show() {
-                                        Err(x) => window.push_notification(Notification::error(format!("Failed to open folder dialog: {x}")), cx),
-                                        Ok(dir) => match dir {
-                                            None => {
-                                                window.push_notification(Notification::error("Please select a folder."), cx)
-                                            },
-                                            Some(_) => {}
-                                        }
-                                    };
-                                }) 
+                                Button::new("working_dir").outline().icon(IconName::Folder).compact()
+                                    .label(self.working_dir.as_ref().map(|p| p.as_os_str().to_str().unwrap_or("Couldn't convert path to UTF-8").to_string()).unwrap_or("Unselected".into()))
+                                    .on_click(cx, on_file_click),  
                             )
                             .child(
                                 Button::new("submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.)))

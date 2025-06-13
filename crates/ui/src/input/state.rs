@@ -1197,7 +1197,8 @@ impl InputState {
     }
 
     pub(super) fn enter(&mut self, action: &Enter, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_multi_line() {
+        if self.is_multi_line() && !action.secondary {
+
               let indent = if self.mode.is_code_editor() {
                 self.indent_of_next_line(window, cx)
             } else {

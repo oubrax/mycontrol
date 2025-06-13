@@ -277,7 +277,6 @@ impl RenderOnce for TextInput {
             .input_pr(self.size)
             .items_center()
             .gap(gap_x)
-            .rounded_b(px(0.))
             .children(prefix)
             .child(self.state.clone())
             .child(

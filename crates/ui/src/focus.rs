@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use gpui::{AnyEntity, App, ClickEvent, ElementId, FocusHandle, Global, Window};
+use std::collections::HashMap;
 
 type ButtonClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 
@@ -26,13 +26,21 @@ pub fn init(cx: &mut App) {
 }
 
 /// Register a button's click handler
-pub fn register_button_handler(
-    cx: &mut App,
-    element_id: ElementId,
-    handler: ButtonClickHandler,
-) {
+pub fn register_button_handler(cx: &mut App, element_id: ElementId, handler: ButtonClickHandler) {
     let registry = cx.global_mut::<FocusRegistry>();
     registry.button_handlers.insert(element_id, handler);
+}
+
+/// Global state managing the focus registry for UI components
+/// 
+/// The focus registry keeps track of focusable elements and their current focus state.
+/// It is stored globally in the application context to enable focus management across
+/// the entire UI hierarchy.
+pub fn remove_focus(cx: &mut App, element_id: ElementId) {
+    let registry = cx.global_mut::<FocusRegistry>();
+    registry.button_handlers.remove(&element_id);
+    registry.handles.remove(&element_id);
+    registry.order.retain(|id| id != &element_id);
 }
 
 /// Handle the enter focus event with window context - this is the proper implementation
@@ -40,13 +48,17 @@ pub fn handle_enter_focus_event_with_window(window: &mut Window, app: &mut App) 
     // Find the currently focused element
     let focused_element_id = {
         let registry = app.global::<FocusRegistry>();
-        registry.order.iter().find(|element_id| {
-            if let Some(handle) = registry.handles.get(element_id) {
-                handle.is_focused(window)
-            } else {
-                false
-            }
-        }).cloned()
+        registry
+            .order
+            .iter()
+            .find(|element_id| {
+                if let Some(handle) = registry.handles.get(element_id) {
+                    handle.is_focused(window)
+                } else {
+                    false
+                }
+            })
+            .cloned()
     };
 
     if let Some(element_id) = focused_element_id {
@@ -79,7 +91,6 @@ pub fn handle_enter_focus_event_with_window(window: &mut Window, app: &mut App) 
 
 // Removed subscription-based handling - now using direct keystroke observer
 
-
 /// Register a focusable element with its ElementId key.
 /// If an element with the same ID already exists, it will be replaced.
 pub fn register_focusable(cx: &mut App, element_id: ElementId, handle: FocusHandle) {
@@ -110,7 +121,12 @@ pub fn register_focusable_with_priority(cx: &mut App, element_id: ElementId, han
 
 /// Register a focusable element with a specific priority index.
 /// Lower indices have higher priority (will be focused first).
-pub fn register_focusable_with_index(cx: &mut App, element_id: ElementId, handle: FocusHandle, priority_index: usize) {
+pub fn register_focusable_with_index(
+    cx: &mut App,
+    element_id: ElementId,
+    handle: FocusHandle,
+    priority_index: usize,
+) {
     let registry = cx.global_mut::<FocusRegistry>();
 
     // If this ElementId doesn't exist in our order, add it at the specified index
@@ -142,7 +158,10 @@ pub fn get_or_create_focus_handle(cx: &mut App, element_id: ElementId) -> FocusH
 
 /// Get or create a FocusHandle for the given ElementId with priority.
 /// This ensures each ElementId has exactly one unique FocusHandle and will be focused first.
-pub fn get_or_create_focus_handle_with_priority(cx: &mut App, element_id: ElementId) -> FocusHandle {
+pub fn get_or_create_focus_handle_with_priority(
+    cx: &mut App,
+    element_id: ElementId,
+) -> FocusHandle {
     // Check if we already have a handle for this ElementId
     {
         let registry = cx.global::<FocusRegistry>();
@@ -159,7 +178,11 @@ pub fn get_or_create_focus_handle_with_priority(cx: &mut App, element_id: Elemen
 
 /// Get or create a FocusHandle for the given ElementId with a specific priority index.
 /// This ensures each ElementId has exactly one unique FocusHandle and will be focused at the specified position.
-pub fn get_or_create_focus_handle_with_index(cx: &mut App, element_id: ElementId, priority_index: usize) -> FocusHandle {
+pub fn get_or_create_focus_handle_with_index(
+    cx: &mut App,
+    element_id: ElementId,
+    priority_index: usize,
+) -> FocusHandle {
     // Check if we already have a handle for this ElementId
     {
         let registry = cx.global::<FocusRegistry>();
@@ -246,7 +269,6 @@ pub fn focus_previous(window: &mut Window, cx: &mut App) {
 pub fn unfocus_all(window: &mut Window) {
     window.blur();
 }
-
 
 #[derive(Clone, Copy, Debug)]
 pub struct EnterFocusEvent {}

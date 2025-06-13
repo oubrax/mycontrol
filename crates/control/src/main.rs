@@ -1,8 +1,9 @@
 use gpui::{
     div, hsla, prelude::*, px, size, svg, transparent_black, AnyView, App, Application, Bounds, Context, Decorations, Entity, EventEmitter, Focusable, Font, MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
+use native_dialog::DialogBuilder;
 use ui::{
-    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputState, TextInput}, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, Icon, IconName, Root, Sizable, Size, StyledExt, TitleBar
+    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, Sizable, Size, StyledExt, TitleBar
 };
 
 const ROUNDED_SIZE: Pixels = px(15.);
@@ -29,7 +30,11 @@ impl ControlRoot {
 }
 
 impl Render for ControlRoot {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+
+        let notification_layer = Root::render_notification_layer(window, cx);
+
+        
         v_flex()
             .size_full()
             .rounded(ROUNDED_SIZE)
@@ -37,6 +42,7 @@ impl Render for ControlRoot {
             // .border_color(cx.theme().border)
             .child(self.title_bar.clone())
             .child(div().flex_1().overflow_hidden().child(self.view.clone()))
+            .child(div().absolute().top_12().children(notification_layer))
     }
 }
 
@@ -66,6 +72,14 @@ impl Render for ControlTitleBar {
                     .child(self.title.clone())
                     .text_color(cx.theme().foreground)
             )
+            .child(
+                Button::new("theme-selector").icon(IconName::Sun).on_click_with_index(cx, 0, |_, window, cx| {
+                    match cx.theme().mode {
+                        ThemeMode::Light => Theme::change(ThemeMode::Dark, Some(window), cx),
+                        ThemeMode::Dark => Theme::change(ThemeMode::Light, Some(window), cx),
+                    }
+                }).outline()
+            )
             .border_b_1()
             .border_color(cx.theme().border)
             .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
@@ -89,7 +103,7 @@ impl MainApp {
                 InputState::new(window, cx)
                     .placeholder("Describe your task")
                     .multi_line()
-                    .auto_grow(3, 9)
+                    .auto_grow(3, 6)
             }),
         };
 
@@ -117,7 +131,7 @@ impl Render for MainApp {
             .bg(cx.theme().background)
             .flex()
             .flex_col()
-            .gap_2()
+            .gap_4()
             .justify_center()
             .items_center()
             .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
@@ -127,40 +141,51 @@ impl Render for MainApp {
                 el.rounded_br(ROUNDED_SIZE)
             })
             .p_8()
-        
             .child(
-            div()
-                .child(
-                    textinput
-                )
-                .pb(px(10.))
-                .rounded(cx.theme().radius)
-                .when(appearance, |this| {
-                    this.bg(bg)
-                      .border_color(cx.theme().input)
-                      .border_1()
-                      .when(cx.theme().shadow, |this| this.shadow_sm())
-                      .when(self.textarea.read(cx).focus_handle(cx).is_focused(window), |this| this.focused_border(cx))
-                })
-                
-                .child(
-                    div()
-                        .flex()
-                        .rounded_b(cx.theme().radius)
-                        .items_center()
-                        .justify_between()
-                        .size_full()
-                        .gap_2()
-                        .px(px(10.))
-                        .child(
-                            Button::new("Path").outline().icon(IconName::Folder).compact().label("/home/oubra")
-                        )
-                        .child(
-                            Button::new("Submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.)))
-                        )
+                div().child("What can I help you with?").font_semibold().text_size(px(32.)).text_center()
             )
+            .child(
+                div()
+                    .child(
+                        textinput
+                    )
+                    .pb(px(10.))
+                    .rounded(cx.theme().radius)
+                    .when(appearance, |this| {
+                        this.bg(bg)
+                          .border_color(cx.theme().input)
+                          .border_1()
+                          .when(cx.theme().shadow, |this| this.shadow_sm())
+                          .when(self.textarea.read(cx).focus_handle(cx).is_focused(window), |this| this.focused_border(cx))
+                    })
+                
+                    .child(
+                        div()
+                        .flex()
+                            .rounded_b(cx.theme().radius)
+                            .items_center()
+                            .justify_between()
+                            .size_full()
+                            .gap_2()
+                            .px(px(10.))
+                            .child(
+                                Button::new("working_dir").outline().icon(IconName::Folder).compact().label("/home/oubra").on_click(cx, |_, window, cx| {
+                                    match DialogBuilder::file().open_single_dir().show() {
+                                        Err(x) => window.push_notification(Notification::error(format!("Failed to open folder dialog: {x}")), cx),
+                                        Ok(dir) => match dir {
+                                            None => {
+                                                window.push_notification(Notification::error("Please select a folder."), cx)
+                                            },
+                                            Some(_) => {}
+                                        }
+                                    };
+                                }) 
+                            )
+                            .child(
+                                Button::new("submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.)))
+                            )
+                )
         )
-        // .child(Button::new("meow").label("Meow button").on_click(cx, |_, _window, _cx| println!("clicked")))
     }
 }
 

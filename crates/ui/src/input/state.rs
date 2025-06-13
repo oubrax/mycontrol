@@ -247,7 +247,6 @@ pub struct InputState {
     pub(super) disabled: bool,
     pub(super) masked: bool,
     pub(super) clean_on_escape: bool,
-    pub(super) pattern: Option<regex::Regex>,
     pub(super) validate: Option<Box<dyn Fn(&str) -> bool + 'static>>,
     pub(crate) scroll_handle: ScrollHandle,
     pub(super) scrollbar_state: Rc<Cell<ScrollbarState>>,
@@ -315,7 +314,6 @@ impl InputState {
             masked: false,
             clean_on_escape: false,
             loading: false,
-            pattern: None,
             validate: None,
             mode: InputMode::SingleLine,
             last_layout: None,
@@ -727,21 +725,7 @@ impl InputState {
         self
     }
 
-    /// Set the regular expression pattern of the input field.
-    pub fn pattern(mut self, pattern: regex::Regex) -> Self {
-        self.pattern = Some(pattern);
-        self
-    }
 
-    /// Set the regular expression pattern of the input field with reference.
-    pub fn set_pattern(
-        &mut self,
-        pattern: regex::Regex,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        self.pattern = Some(pattern);
-    }
 
     /// Set the validation function of the input field.
     pub fn validate(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
@@ -1214,26 +1198,15 @@ impl InputState {
 
     pub(super) fn enter(&mut self, action: &Enter, window: &mut Window, cx: &mut Context<Self>) {
         if self.is_multi_line() {
-            let is_eof = self.selected_range.end == self.text.len();
+              let indent = if self.mode.is_code_editor() {
+                self.indent_of_next_line(window, cx)
+            } else {
+                "".to_string()
+            };
 
-            // Get current line indent
-            let indent = self.indent_of_next_line(window, cx);
-            self.replace_text_in_range(None, "\n", window, cx);
-
-            // Move cursor to the start of the next line
-            let mut new_offset = self.cursor_offset() - 1;
-            if is_eof {
-                new_offset += 1;
-            }
-            self.move_to(self.next_boundary(new_offset), window, cx);
-
-            // Add indent
-            self.replace_text_in_range(
-                Some(self.range_to_utf16(&(self.cursor_offset()..self.cursor_offset()))),
-                &indent,
-                window,
-                cx,
-            );
+              // Add newline and indent
+            let new_line_text = format!("\n{}", indent);
+            self.replace_text_in_range(None, &new_line_text, window, cx);
         }
 
         cx.emit(InputEvent::PressEnter {
@@ -1869,11 +1842,9 @@ impl InputState {
             return false;
         }
 
-        self.pattern
-            .as_ref()
-            .map(|p| p.is_match(new_text))
-            .unwrap_or(true)
+        true
     }
+    
 
     /// Set the mask pattern for formatting the input text.
     ///

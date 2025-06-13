@@ -1,10 +1,13 @@
 use std::rc::Rc;
 
-use crate::{h_flex, ActiveTheme, Icon, IconName, InteractiveElementExt as _, Sizable as _, Button, ButtonVariants};
+use crate::{
+    ActiveTheme, Button, ButtonVariants, Icon, IconName, InteractiveElementExt as _, Sizable as _,
+    focus, h_flex,
+};
 use gpui::{
-    div, prelude::FluentBuilder as _, px, relative, AnyElement, App, ClickEvent, Div, Element,
-    Hsla, InteractiveElement as _, IntoElement, MouseButton, ParentElement, Pixels, RenderOnce,
-    Stateful, StatefulInteractiveElement as _, Style, Styled, TitlebarOptions, Window,
+    AnyElement, App, ClickEvent, Div, Element, Hsla, InteractiveElement as _, IntoElement,
+    MouseButton, ParentElement, Pixels, RenderOnce, Stateful, StatefulInteractiveElement as _,
+    Style, Styled, TitlebarOptions, Window, div, prelude::FluentBuilder as _, px, relative,
 };
 
 pub const TITLE_BAR_HEIGHT: Pixels = px(34.);
@@ -107,21 +110,12 @@ impl ControlIcon {
         matches!(self, Self::Close { .. })
     }
 }
-
 impl RenderOnce for ControlIcon {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let icon = self.clone();
-        let is_linux = cfg!(target_os = "linux");
-        let on_close_window = match &icon {
-            ControlIcon::Close { on_close_window } => on_close_window.clone(),
-            _ => None,
-        };
-
-        // Determine the priority index based on the control type
-        let priority_index = match self {
-            Self::Minimize => 0,
-            Self::Restore | Self::Maximize => 1,
-            Self::Close { .. } => 2,
+        let priority_index = match &self {
+            Self::Minimize => 1,
+            Self::Restore | Self::Maximize => 2,
+            Self::Close { .. } => 3,
         };
 
         let mut button = Button::new(self.id())
@@ -131,17 +125,30 @@ impl RenderOnce for ControlIcon {
             .w(TITLE_BAR_HEIGHT)
             .h_full();
 
-        if is_linux {
+        
+        // Add click handler for Linux only
+        if cfg!(target_os = "linux") {
+            // Handle focus for maximize/restore buttons
+            if matches!(self, Self::Maximize) {
+                focus::remove_focus(cx, "restore".into());
+            } else if matches!(self, Self::Restore) {
+                focus::remove_focus(cx, "maximize".into());
+            }
+            let icon = self.clone();
+            let on_close_window = match &icon {
+                Self::Close { on_close_window } => on_close_window.clone(),
+                _ => None,
+            };
+
             button = button.on_click_with_index(cx, priority_index, move |_, window, cx| {
                 window.prevent_default();
                 cx.stop_propagation();
 
-                match icon {
+                match &icon {
                     Self::Minimize => window.minimize_window(),
-                    Self::Restore => window.zoom_window(),
-                    Self::Maximize => window.zoom_window(),
+                    Self::Restore | Self::Maximize => window.zoom_window(),
                     Self::Close { .. } => {
-                        if let Some(f) = on_close_window.clone() {
+                        if let Some(f) = on_close_window.as_ref() {
                             f(&ClickEvent::default(), window, cx);
                         } else {
                             window.remove_window();

@@ -1,12 +1,11 @@
 use std::path::PathBuf;
 
 use gpui::{
-    div, hsla, prelude::*, px, rems, size, svg, transparent_black, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, Font, MouseButton, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
+    div, hsla, prelude::*, px, rems, size, transparent_black, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
-use native_dialog::DialogBuilder;
 use rfd::FileDialog;
 use ui::{
-    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, Sizable, Size, StyledExt, TitleBar
+    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, StyledExt, TitleBar
 };
 
 const ROUNDED_SIZE: Pixels = px(15.);
@@ -115,7 +114,7 @@ impl MainApp {
         focus::register_focusable(cx, "textarea_main".into(), m.textarea.focus_handle(cx));
         m.textarea.focus_handle(cx).focus(window);
 
-        cx.subscribe(&m.textarea, |i, e: &InputEvent, cx| {
+        cx.subscribe(&m.textarea, |_i, e: &InputEvent, _cx| {
             if matches!(e, InputEvent::PressEnter { secondary: true }) {
                 dbg!("Submit triggered");
             }

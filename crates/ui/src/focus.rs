@@ -31,11 +31,6 @@ pub fn register_button_handler(cx: &mut App, element_id: ElementId, handler: But
     registry.button_handlers.insert(element_id, handler);
 }
 
-/// Global state managing the focus registry for UI components
-/// 
-/// The focus registry keeps track of focusable elements and their current focus state.
-/// It is stored globally in the application context to enable focus management across
-/// the entire UI hierarchy.
 pub fn remove_focus(cx: &mut App, element_id: ElementId) {
     let registry = cx.global_mut::<FocusRegistry>();
     registry.button_handlers.remove(&element_id);
@@ -62,7 +57,6 @@ pub fn handle_enter_focus_event_with_window(window: &mut Window, app: &mut App) 
     };
 
     if let Some(element_id) = focused_element_id {
-        println!("Found focused button: {:?}", element_id);
 
         // Extract the handler from the registry to avoid borrowing conflicts
         let handler = {
@@ -73,7 +67,6 @@ pub fn handle_enter_focus_event_with_window(window: &mut Window, app: &mut App) 
         if let Some(handler) = handler {
             // Create a default click event and trigger the handler
             let click_event = ClickEvent::default();
-            println!("Triggering click handler for button: {:?}", element_id);
 
             // Call the handler
             handler(&click_event, window, app);
@@ -81,12 +74,8 @@ pub fn handle_enter_focus_event_with_window(window: &mut Window, app: &mut App) 
             // Put the handler back in the registry
             let mut registry = app.global_mut::<FocusRegistry>();
             registry.button_handlers.insert(element_id, handler);
-        } else {
-            println!("No click handler found for button: {:?}", element_id);
-        }
-    } else {
-        println!("No focused button found");
-    }
+        } 
+    } 
 }
 
 // Removed subscription-based handling - now using direct keystroke observer
@@ -200,7 +189,6 @@ pub fn get_or_create_focus_handle_with_index(
 pub fn focus_next(window: &mut Window, cx: &mut App) {
     let registry = cx.global::<FocusRegistry>();
     if registry.order.is_empty() {
-        println!("handles empty");
         return;
     }
 
@@ -222,7 +210,6 @@ pub fn focus_next(window: &mut Window, cx: &mut App) {
     // Focus the next element
     if let Some(element_id) = registry.order.get(next_idx) {
         if let Some(handle) = registry.handles.get(element_id) {
-            println!("Focusing next element: {:?}", element_id);
             handle.focus(window);
         }
     }
@@ -231,7 +218,6 @@ pub fn focus_next(window: &mut Window, cx: &mut App) {
 pub fn focus_previous(window: &mut Window, cx: &mut App) {
     let registry = cx.global::<FocusRegistry>();
     if registry.order.is_empty() {
-        println!("handles empty");
         return;
     }
 
@@ -259,7 +245,6 @@ pub fn focus_previous(window: &mut Window, cx: &mut App) {
     // Focus the previous element
     if let Some(element_id) = registry.order.get(prev_idx) {
         if let Some(handle) = registry.handles.get(element_id) {
-            println!("Focusing previous element: {:?}", element_id);
             handle.focus(window);
         }
     }

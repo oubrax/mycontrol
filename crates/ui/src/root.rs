@@ -409,14 +409,14 @@ impl Render for Root {
         let base_font_size = cx.theme().font_size;
         window.set_rem_size(base_font_size);
 
-        window_border().child(
+        window_border(cx.theme().radius).child(
             div()
                 .id("root")
                 .relative()
                 .size_full()
                 .font_family(cx.theme().font_family.clone())
                 .bg(cx.theme().background)
-                .rounded(px(15.))
+                .rounded(cx.theme().radius)
                 .text_color(cx.theme().foreground)
                 .child(self.view.clone()),
         )

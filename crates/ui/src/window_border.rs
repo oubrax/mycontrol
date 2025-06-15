@@ -1,5 +1,3 @@
-// From:
-// https://github.com/zed-industries/zed/blob/a8afc63a91f6b75528540dcffe73dc8ce0c92ad8/crates/gpui/examples/window_shadow.rs
 use gpui::{
     canvas, div, point, prelude::FluentBuilder as _, px, AnyElement, App, Bounds, CursorStyle,
     Decorations, Edges, HitboxBehavior, Hsla, InteractiveElement as _, IntoElement, MouseButton,
@@ -13,22 +11,23 @@ const SHADOW_SIZE: Pixels = Pixels(0.0);
 #[cfg(target_os = "linux")]
 const SHADOW_SIZE: Pixels = Pixels(12.0);
 const BORDER_SIZE: Pixels = Pixels(1.0);
-pub(crate) const BORDER_RADIUS: Pixels = Pixels(15.0);
 
-/// Create a new window border.
-pub fn window_border() -> WindowBorder {
-    WindowBorder::new()
+/// Create a new window border with the specified border radius.
+pub fn window_border(border_radius: Pixels) -> WindowBorder {
+    WindowBorder::new(border_radius)
 }
 
-/// Window border use to render a custom window border and shadow for Linux.
+/// Window border used to render a custom window border and shadow for Linux.
 #[derive(IntoElement, Default)]
 pub struct WindowBorder {
+    border_radius: Pixels,
     children: Vec<AnyElement>,
 }
 
 impl WindowBorder {
-    pub fn new() -> Self {
+    pub fn new(border_radius: Pixels) -> Self {
         Self {
+            border_radius,
             ..Default::default()
         }
     }
@@ -65,6 +64,7 @@ impl ParentElement for WindowBorder {
 
 impl RenderOnce for WindowBorder {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let border_radius = self.border_radius;
         let decorations = window.window_decorations();
         window.set_client_inset(SHADOW_SIZE);
 
@@ -115,16 +115,16 @@ impl RenderOnce for WindowBorder {
                         .absolute(),
                     )
                     .when(!(tiling.top || tiling.right), |div| {
-                        div.rounded_tr(BORDER_RADIUS)
+                        div.rounded_tr(border_radius)
                     })
                     .when(!(tiling.top || tiling.left), |div| {
-                        div.rounded_tl(BORDER_RADIUS)
+                        div.rounded_tl(border_radius)
                     })
                     .when(!(tiling.bottom || tiling.right), |div| {
-                        div.rounded_br(BORDER_RADIUS)
+                        div.rounded_br(border_radius)
                     })
                     .when(!(tiling.bottom || tiling.left), |div| {
-                        div.rounded_bl(BORDER_RADIUS)
+                        div.rounded_bl(border_radius)
                     })
                     .when(!tiling.top, |div| div.pt(SHADOW_SIZE))
                     .when(!tiling.bottom, |div| div.pb(SHADOW_SIZE))
@@ -134,10 +134,9 @@ impl RenderOnce for WindowBorder {
                         let size = window.window_bounds().get_bounds().size;
                         let pos = window.mouse_position();
 
-                        match resize_edge(pos, SHADOW_SIZE, size) {
-                            Some(edge) => window.start_window_resize(edge),
-                            None => {}
-                        };
+                        if let Some(edge) = resize_edge(pos, SHADOW_SIZE, size) {
+                            window.start_window_resize(edge);
+                        }
                     }),
             })
             .size_full()
@@ -146,18 +145,17 @@ impl RenderOnce for WindowBorder {
                     .map(|div| match decorations {
                         Decorations::Server => div,
                         Decorations::Client { tiling } => div
-                            // .border_color(cx.theme().window_border)
                             .when(!(tiling.top || tiling.right), |div| {
-                                div.rounded_tr(BORDER_RADIUS)
+                                div.rounded_tr(border_radius)
                             })
                             .when(!(tiling.top || tiling.left), |div| {
-                                div.rounded_tl(BORDER_RADIUS)
+                                div.rounded_tl(border_radius)
                             })
                             .when(!(tiling.bottom || tiling.right), |div| {
-                                div.rounded_br(BORDER_RADIUS)
+                                div.rounded_br(border_radius)
                             })
                             .when(!(tiling.bottom || tiling.left), |div| {
-                                div.rounded_bl(BORDER_RADIUS)
+                                div.rounded_bl(border_radius)
                             })
                             .border_color(cx.theme().window_border)
                             .when(!tiling.top, |div| div.border_t(BORDER_SIZE))

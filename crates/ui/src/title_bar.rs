@@ -121,7 +121,6 @@ impl RenderOnce for ControlIcon {
         let mut button = Button::new(self.id())
             .icon(Icon::new(self.icon()).small())
             .ghost()
-            .rounded(px(6.0))
             .w(TITLE_BAR_HEIGHT)
             .h_full();
 

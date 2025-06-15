@@ -1,0 +1,25 @@
+[theme]
+mode = "dark"
+radius = 10
+shadow = false
+font_family = "Geist"
+font_size = 15
+tile_grid_size = 4
+tile_shadow = false
+scrollbar_show = "scrolling"
+
+[colors.light]
+accent = { h = 240.0, s = 4.8, l = 93.9 }
+accent_foreground = { h = 240.0, s = 5.9, l = 10.0 }
+background = { h = 0.0, s = 0.0, l = 100.0 }
+border = { h = 240.0, s = 5.9, l = 90.0 }
+foreground = { h = 240.0, s = 10.0, l = 3.9 }
+# ... (all other light theme colors from the code)
+
+[colors.dark]
+accent = { h = 240.0, s = 3.7, l = 15.9 }
+accent_foreground = { h = 0.0, s = 0.0, l = 78.0 }
+background = { h = 0.0, s = 0.0, l = 8.0 }
+border = { h = 240.0, s = 3.7, l = 16.9 }
+foreground = { h = 0.0, s = 0.0, l = 78.0 }
+# ... (all other dark theme colors from the code)

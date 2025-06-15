@@ -57,7 +57,8 @@ pub fn box_shadow(
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ThemeColor {
     /// Used for accents such as hover background on MenuItem, ListItem, etc.
     pub accent: Hsla,
@@ -241,7 +242,8 @@ pub struct ThemeColor {
     /// This is only works on Linux, other platforms we can't change the window border color.
     pub window_border: Hsla,
 }
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ThemeColorWithMode {
     pub light: ThemeColor,
     pub dark: ThemeColor,

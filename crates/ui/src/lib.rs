@@ -21,12 +21,14 @@ pub mod highlighter;
 pub mod history;
 pub mod title_bar;
 pub mod window_border;
+pub mod sidebar;
 
 pub use button::*;
 pub use colors::*;
 pub use icon::*;
 pub use kbd::*;
 pub use styled::*;
+pub use sidebar::*;
 
 pub use theme::*;
 pub use title_bar::*;

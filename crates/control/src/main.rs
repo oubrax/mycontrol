@@ -7,7 +7,7 @@ use gpui::{
 };
 use rfd::FileDialog;
 use ui::{
-    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, StyledExt, TitleBar
+    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, h_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, StyledExt, TitleBar, Sidebar, NewTaskSidebar, Side
 };
 use crate::config::{AppConfig, load_config, save_config};
 use crate::config::ActiveConfig;
@@ -26,6 +26,7 @@ impl ControlRoot {
         cx: &mut Context<Self>,
     ) -> Self {
         let title_bar = cx.new(|cx| ControlTitleBar::new(title, cx));
+        
         Self {
             title_bar,
             view: view.into(),
@@ -42,7 +43,24 @@ impl Render for ControlRoot {
             .size_full()
             .rounded(rounded_size)
             .child(self.title_bar.clone())
-            .child(div().flex_1().overflow_hidden().child(self.view.clone()))
+            .child(
+                h_flex()
+                    .flex_1()
+                    .overflow_hidden()                    .child(
+                        Sidebar::left()
+                            .collapsible(true)
+                            .width(px(230.)) 
+                            .child(NewTaskSidebar::new().on_new_task(|_ev, window, cx| {
+                                window.push_notification(Notification::info("Creating new task..."), cx);
+                            }))
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .overflow_hidden()
+                            .child(self.view.clone())
+                    )
+            )
             .child(div().absolute().top_12().children(notification_layer))
     }
 }
@@ -150,9 +168,7 @@ impl Render for MainApp {
             } else {
                 window.push_notification(Notification::error("Please select a folder."), cx);
             }
-        });
-
-        div()
+        });        div()
             .id("main_app")
             .size_full()
             .bg(cx.theme().background)
@@ -173,7 +189,8 @@ impl Render for MainApp {
             )
             .child(
                 div()
-                .max_w(rems(64.))
+                    .w_full() 
+                    .max_w(rems(48.)) 
                     .child(
                         textinput
                     )
@@ -189,11 +206,11 @@ impl Render for MainApp {
                 
                     .child(
                         div()
-                        .flex()
+                            .flex()
                             .rounded_b(cx.theme().radius)
                             .items_center()
                             .justify_between()
-                            .size_full()
+                            .w_full() 
                             .gap_2()
                             .px(px(10.))
                             .child(
@@ -204,8 +221,8 @@ impl Render for MainApp {
                             .child(
                                 Button::new("submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.)))
                             )
-                )
-        )
+                    )
+            )
     }
 }
 

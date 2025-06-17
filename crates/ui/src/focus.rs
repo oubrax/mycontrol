@@ -1,4 +1,4 @@
-use gpui::{AnyEntity, App, ClickEvent, ElementId, FocusHandle, Global, Window};
+use gpui::{App, ClickEvent, ElementId, FocusHandle, Global, Window};
 use std::collections::HashMap;
 
 type ButtonClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
@@ -60,7 +60,7 @@ pub fn handle_enter_focus_event_with_window(window: &mut Window, app: &mut App) 
 
         // Extract the handler from the registry to avoid borrowing conflicts
         let handler = {
-            let mut registry = app.global_mut::<FocusRegistry>();
+            let registry = app.global_mut::<FocusRegistry>();
             registry.button_handlers.remove(&element_id)
         };
 
@@ -72,64 +72,40 @@ pub fn handle_enter_focus_event_with_window(window: &mut Window, app: &mut App) 
             handler(&click_event, window, app);
 
             // Put the handler back in the registry
-            let mut registry = app.global_mut::<FocusRegistry>();
+            let registry = app.global_mut::<FocusRegistry>();
             registry.button_handlers.insert(element_id, handler);
         } 
     } 
 }
 
-// Removed subscription-based handling - now using direct keystroke observer
 
 /// Register a focusable element with its ElementId key.
 /// If an element with the same ID already exists, it will be replaced.
 pub fn register_focusable(cx: &mut App, element_id: ElementId, handle: FocusHandle) {
     let registry = cx.global_mut::<FocusRegistry>();
-
-    // If this ElementId doesn't exist in our order, add it
-    if !registry.handles.contains_key(&element_id) {
-        registry.order.push(element_id.clone());
-    }
-
-    // Insert or replace the handle for this ElementId
+    // Order is now managed strictly via set_focus_cycle().
+    // Just register the handle for ElementId. No mutation of order permitted here.
     registry.handles.insert(element_id, handle);
 }
 
-/// Register a focusable element with priority (at the beginning of the focus order).
-/// This ensures the element will be focused first when tabbing.
-pub fn register_focusable_with_priority(cx: &mut App, element_id: ElementId, handle: FocusHandle) {
+/*
+ * Focus cycle functions based on a fully-custom cycle order.
+ */
+
+/// Replace the focus cycle order. Only elements in the cycle will be included in tab traversal.
+/// Any element in the cycle missing a handle will be ignored for tab purposes until registered.
+/// This function replaces the previous focus order implementation.
+pub fn set_focus_cycle<I: Into<ElementId>>(cx: &mut App, ids: Vec<I>) {
     let registry = cx.global_mut::<FocusRegistry>();
-
-    // If this ElementId doesn't exist in our order, add it at the beginning
-    if !registry.handles.contains_key(&element_id) {
-        registry.order.insert(0, element_id.clone());
-    }
-
-    // Insert or replace the handle for this ElementId
-    registry.handles.insert(element_id, handle);
-}
-
-/// Register a focusable element with a specific priority index.
-/// Lower indices have higher priority (will be focused first).
-pub fn register_focusable_with_index(
-    cx: &mut App,
-    element_id: ElementId,
-    handle: FocusHandle,
-    priority_index: usize,
-) {
-    let registry = cx.global_mut::<FocusRegistry>();
-
-    // If this ElementId doesn't exist in our order, add it at the specified index
-    if !registry.handles.contains_key(&element_id) {
-        let insert_index = priority_index.min(registry.order.len());
-        registry.order.insert(insert_index, element_id.clone());
-    }
-
-    // Insert or replace the handle for this ElementId
-    registry.handles.insert(element_id, handle);
+    registry.order.clear();
+    // Convert all to ElementId, allow repeats (user responsibility to not do so).
+    registry.order.extend(ids.into_iter().map(Into::into));
 }
 
 /// Get or create a FocusHandle for the given ElementId.
 /// This ensures each ElementId has exactly one unique FocusHandle.
+/// Calling this does NOT affect tab ordering/cycle except that,
+/// if an element is not in the current focus cycle, it will not participate in traversal.
 pub fn get_or_create_focus_handle(cx: &mut App, element_id: ElementId) -> FocusHandle {
     // Check if we already have a handle for this ElementId
     {
@@ -145,53 +121,11 @@ pub fn get_or_create_focus_handle(cx: &mut App, element_id: ElementId) -> FocusH
     handle
 }
 
-/// Get or create a FocusHandle for the given ElementId with priority.
-/// This ensures each ElementId has exactly one unique FocusHandle and will be focused first.
-pub fn get_or_create_focus_handle_with_priority(
-    cx: &mut App,
-    element_id: ElementId,
-) -> FocusHandle {
-    // Check if we already have a handle for this ElementId
-    {
-        let registry = cx.global::<FocusRegistry>();
-        if let Some(handle) = registry.handles.get(&element_id) {
-            return handle.clone();
-        }
-    }
-
-    // Create a new handle and register it with priority
-    let handle = cx.focus_handle();
-    register_focusable_with_priority(cx, element_id, handle.clone());
-    handle
-}
-
-/// Get or create a FocusHandle for the given ElementId with a specific priority index.
-/// This ensures each ElementId has exactly one unique FocusHandle and will be focused at the specified position.
-pub fn get_or_create_focus_handle_with_index(
-    cx: &mut App,
-    element_id: ElementId,
-    priority_index: usize,
-) -> FocusHandle {
-    // Check if we already have a handle for this ElementId
-    {
-        let registry = cx.global::<FocusRegistry>();
-        if let Some(handle) = registry.handles.get(&element_id) {
-            return handle.clone();
-        }
-    }
-
-    // Create a new handle and register it with the specified index
-    let handle = cx.focus_handle();
-    register_focusable_with_index(cx, element_id, handle.clone(), priority_index);
-    handle
-}
-
 pub fn focus_next(window: &mut Window, cx: &mut App) {
     let registry = cx.global::<FocusRegistry>();
     if registry.order.is_empty() {
         return;
     }
-
     // Find the currently focused element
     let current_idx = registry.order.iter().position(|element_id| {
         if let Some(handle) = registry.handles.get(element_id) {

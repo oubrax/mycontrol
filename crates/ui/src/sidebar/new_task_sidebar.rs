@@ -1,6 +1,6 @@
 use crate::{
     button::{Button, ButtonVariants},
-    v_flex, Collapsible, Icon, IconName, Sizable,
+    v_flex, Collapsible, Icon, IconName,
 };
 use gpui::{
     div, App, ClickEvent, IntoElement, ParentElement,

@@ -161,14 +161,13 @@ impl RenderOnce for ButtonGroup {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let children_len = self.children.len();
         // Use the ButtonGroup's selected_indices as the initial state
-        let mut selected_ixs = self.selected_indices.clone();
+        let selected_ixs = self.selected_indices.clone();
         let state = Rc::new(Cell::new(None));
 
         // Create a shared handler for the ButtonGroup's on_click
         let group_on_click = self.on_click.clone();
         let multiple = self.multiple;
         let disabled = self.disabled;
-        let selected_variant = self.selected_variant;
 
         self.base
             .id(self.id)

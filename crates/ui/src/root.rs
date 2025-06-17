@@ -6,7 +6,7 @@ use crate::{
     window_border::window_border, ActiveTheme, Placement,
 };
 use gpui::{
-    canvas, div, prelude::FluentBuilder as _, px, AnyView, App, AppContext, Context, DefiniteLength, Entity, FocusHandle, InteractiveElement, IntoElement, ParentElement as _, Render, Styled, Window
+    canvas, div, prelude::FluentBuilder as _, AnyView, App, AppContext, Context, DefiniteLength, Entity, FocusHandle, InteractiveElement, IntoElement, ParentElement as _, Render, Styled, Window
 };
 use std::rc::Rc;
 

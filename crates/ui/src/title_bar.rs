@@ -2,11 +2,11 @@ use std::rc::Rc;
 
 use crate::{
     ActiveTheme, Button, ButtonVariants, Icon, IconName, InteractiveElementExt as _, Sizable as _,
-    focus, h_flex,
+    h_flex,
 };
 use gpui::{
-    AnyElement, App, ClickEvent, Div, Element, Hsla, InteractiveElement as _, IntoElement,
-    MouseButton, ParentElement, Pixels, RenderOnce, Stateful, StatefulInteractiveElement as _,
+    AnyElement, App, ClickEvent, Div, Element, InteractiveElement as _, IntoElement,
+    ParentElement, Pixels, RenderOnce, Stateful,
     Style, Styled, TitlebarOptions, Window, div, prelude::FluentBuilder as _, px, relative,
 };
 
@@ -64,8 +64,7 @@ impl TitleBar {
 #[derive(IntoElement, Clone)]
 enum ControlIcon {
     Minimize,
-    Restore,
-    Maximize,
+    Zoom, // Replaces both Restore and Maximize
     Close {
         on_close_window: Option<Rc<Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>>>,
     },
@@ -76,12 +75,8 @@ impl ControlIcon {
         Self::Minimize
     }
 
-    fn restore() -> Self {
-        Self::Restore
-    }
-
-    fn maximize() -> Self {
-        Self::Maximize
+    fn zoom() -> Self {
+        Self::Zoom
     }
 
     fn close(on_close_window: Option<Rc<Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>>>) -> Self {
@@ -91,47 +86,38 @@ impl ControlIcon {
     fn id(&self) -> &'static str {
         match self {
             Self::Minimize => "minimize",
-            Self::Restore => "restore",
-            Self::Maximize => "maximize",
+            Self::Zoom => "zoom", // Both maximize/restore use the same id
             Self::Close { .. } => "close",
         }
     }
 
-    fn icon(&self) -> IconName {
+    fn icon(&self, window: &Window) -> IconName {
         match self {
             Self::Minimize => IconName::WindowMinimize,
-            Self::Restore => IconName::WindowRestore,
-            Self::Maximize => IconName::WindowMaximize,
+            Self::Zoom => {
+                if window.is_maximized() {
+                    IconName::WindowRestore
+                } else {
+                    IconName::WindowMaximize
+                }
+            },
             Self::Close { .. } => IconName::WindowClose,
         }
     }
 
-    fn is_close(&self) -> bool {
-        matches!(self, Self::Close { .. })
-    }
 }
 impl RenderOnce for ControlIcon {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let priority_index = match &self {
-            Self::Minimize => 1,
-            Self::Restore | Self::Maximize => 2,
-            Self::Close { .. } => 3,
-        };
-
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let mut button = Button::new(self.id())
-            .icon(Icon::new(self.icon()).small())
+            .icon(Icon::new(self.icon(window)).small())
             .ghost()
             .w(TITLE_BAR_HEIGHT)
             .h_full();
 
-        
         // Add click handler for Linux only
         if cfg!(target_os = "linux") {
-            // Handle focus for maximize/restore buttons
-            if matches!(self, Self::Maximize) {
-                focus::remove_focus(cx, "restore".into());
-            } else if matches!(self, Self::Restore) {
-                focus::remove_focus(cx, "maximize".into());
+            if let ControlIcon::Zoom = self {
+                // Remove focus for any previous alias, not needed since we always use "zoom"
             }
             let icon = self.clone();
             let on_close_window = match &icon {
@@ -139,13 +125,13 @@ impl RenderOnce for ControlIcon {
                 _ => None,
             };
 
-            button = button.on_click_with_index(cx, priority_index, move |_, window, cx| {
+            button = button.on_click(cx, move |_, window, cx| {
                 window.prevent_default();
                 cx.stop_propagation();
 
                 match &icon {
                     Self::Minimize => window.minimize_window(),
-                    Self::Restore | Self::Maximize => window.zoom_window(),
+                    Self::Zoom => window.zoom_window(),
                     Self::Close { .. } => {
                         if let Some(f) = on_close_window.as_ref() {
                             f(&ClickEvent::default(), window, cx);
@@ -167,7 +153,7 @@ struct WindowControls {
 }
 
 impl RenderOnce for WindowControls {
-    fn render(self, window: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         if cfg!(target_os = "macos") {
             return div().id("window-controls");
         }
@@ -183,11 +169,7 @@ impl RenderOnce for WindowControls {
                     .content_stretch()
                     .h_full()
                     .child(ControlIcon::minimize())
-                    .child(if window.is_maximized() {
-                        ControlIcon::restore()
-                    } else {
-                        ControlIcon::maximize()
-                    }),
+                    .child(ControlIcon::zoom()), // always render one Zoom, icon switches automatically
             )
             .child(ControlIcon::close(self.on_close_window))
     }

@@ -1,13 +1,12 @@
 mod config;
-use std::path::PathBuf;
-use std::sync::Arc;
 
 use gpui::{
-    div, hsla, prelude::*, px, rems, size, transparent_black, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, Pixels, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
+    div, prelude::*, px, rems, size, transparent_black, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
 use rfd::FileDialog;
 use ui::{
-    colors::{self, Colorize}, focus::{self, EnterFocusEvent}, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{self, hsl, ActiveTheme, Theme, ThemeColor, ThemeMode}, v_flex, h_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, Root, StyledExt, TitleBar, Sidebar, NewTaskSidebar, Side
+    theme,
+    focus::{self, EnterFocusEvent}, h_flex, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{ActiveTheme, Theme, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, NewTaskSidebar, Root, Sidebar, SidebarToggleButton, StyledExt, TitleBar
 };
 use crate::config::{AppConfig, load_config, save_config};
 use crate::config::ActiveConfig;
@@ -16,6 +15,7 @@ use crate::config::ActiveConfig;
 struct ControlRoot {
     title_bar: Entity<ControlTitleBar>,
     view: AnyView,
+    sidebar_collapesed: bool,
 }
 
 impl ControlRoot {
@@ -26,10 +26,20 @@ impl ControlRoot {
         cx: &mut Context<Self>,
     ) -> Self {
         let title_bar = cx.new(|cx| ControlTitleBar::new(title, cx));
-        
+
+        cx.subscribe(&title_bar, |this, _titlebar, event, cx| {
+            if *event == TitleBarEvent::ToggleCollapse {
+                this.sidebar_collapesed = !this.sidebar_collapesed;
+                cx.notify();
+            }
+        }).detach();
+
+        focus::set_focus_cycle(cx, vec!["collapse", "theme-selector", "minimize", "zoom", "close",  "new-task", "textarea_main", "working_dir", "submit"]);
+     
         Self {
             title_bar,
             view: view.into(),
+            sidebar_collapesed: false,
         }
     }
 }
@@ -46,13 +56,22 @@ impl Render for ControlRoot {
             .child(
                 h_flex()
                     .flex_1()
-                    .overflow_hidden()                    .child(
-                        Sidebar::left()
-                            .collapsible(true)
-                            .width(px(230.)) 
-                            .child(NewTaskSidebar::new().on_new_task(|_ev, window, cx| {
-                                window.push_notification(Notification::info("Creating new task..."), cx);
-                            }))
+                    .overflow_hidden() 
+                    .child(
+                        div()
+                            .p(px(10.))
+                            .h_full() 
+                            .child(
+                                Sidebar::left()
+                                    .collapsible(true)
+                                    .collapsed(self.sidebar_collapesed)
+                                    .floating(true)
+                                    .width(px(230.))
+                                    
+                                    .child(NewTaskSidebar::new().on_new_task(|_ev, window, cx| {
+                                        window.push_notification(Notification::info("Creating new task..."), cx);
+                                    }))
+                        )
                     )
                     .child(
                         div()
@@ -70,6 +89,11 @@ struct ControlTitleBar {
     title: SharedString,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TitleBarEvent {
+    ToggleCollapse
+}
+
 impl ControlTitleBar {
     pub fn new(
         title: impl Into<SharedString>,
@@ -81,19 +105,23 @@ impl ControlTitleBar {
     }
 }
 
+impl EventEmitter<TitleBarEvent> for ControlTitleBar {}
 impl Render for ControlTitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rounded_size = px(cx.config().ui_settings.rounded_size);
-
         TitleBar::new()
             .child(
-                div()
+                h_flex()
                     .id("title-text")
+                    .gap(px(2.))
+                    .child(SidebarToggleButton::left().on_click(cx.listener(|_this, _event, _window, cx| {
+                        cx.emit(TitleBarEvent::ToggleCollapse);
+                    })))
                     .child(self.title.clone())
                     .text_color(cx.theme().foreground)
             )
             .child(
-                Button::new("theme-selector").icon(IconName::Sun).on_click_with_index(cx, 0, |_, window, cx| {
+                Button::new("theme-selector").icon(IconName::Sun).on_click(cx, |_, window, cx| {
                     let new_mode = match cx.theme().mode {
                         ThemeMode::Light => ThemeMode::Dark,
                         ThemeMode::Dark => ThemeMode::Light,
@@ -141,6 +169,7 @@ impl MainApp {
                 dbg!("Submit triggered");
             }
         }).detach();
+
         m
     }
 }
@@ -219,7 +248,7 @@ impl Render for MainApp {
                                     .on_click(cx, on_file_click),
                             )
                             .child(
-                                Button::new("submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.)))
+                                Button::new("submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.))).on_click(cx, |_event, _window, _cx| {})
                             )
                     )
             )
@@ -283,7 +312,7 @@ fn main() {
                     highlighter::init(cx);
                     input::init(cx);
                     Theme::change(config.theme_mode, None, cx);
-
+                    println!("{:?}", window.gpu_specs());
                     focus::init(cx);
                     let main_app = cx.new(|cx| MainApp::new(window, cx));
                     let control_root =

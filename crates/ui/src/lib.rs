@@ -32,7 +32,6 @@ pub use sidebar::*;
 
 pub use theme::*;
 pub use title_bar::*;
-pub use focus::{focus_next, focus_previous, get_or_create_focus_handle, get_or_create_focus_handle_with_priority, register_focusable, unfocus_all};
 pub use event::InteractiveElementExt;
 pub use assets::Assets;
 pub use root::*;

@@ -8,7 +8,7 @@ use gpui::{
     div, prelude::FluentBuilder, px, AnyElement, App, ClickEvent, DefiniteLength,
     InteractiveElement as _, IntoElement, ParentElement, Pixels, RenderOnce, Styled, Window,
 };
-use std::rc::Rc;
+use std::{rc::Rc};
 
 mod footer;
 mod group;
@@ -34,6 +34,7 @@ pub struct Sidebar<E: Collapsible + IntoElement + 'static> {
     footer: Option<AnyElement>,
     /// The side of the sidebar
     side: Side,
+    floating: bool,
     collapsible: bool,
     width: DefiniteLength,
     border_width: Pixels,
@@ -47,6 +48,7 @@ impl<E: Collapsible + IntoElement> Sidebar<E> {
             header: None,
             footer: None,
             side,
+            floating: false,
             collapsible: true,
             width: DEFAULT_WIDTH.into(),
             border_width: px(1.),
@@ -95,6 +97,12 @@ impl<E: Collapsible + IntoElement> Sidebar<E> {
     /// Set the footer of the sidebar.
     pub fn footer(mut self, footer: impl IntoElement) -> Self {
         self.footer = Some(footer.into_any_element());
+        self
+    }
+
+
+    pub fn floating(mut self, floating: bool) -> Self {
+        self.floating = floating;
         self
     }
 
@@ -200,10 +208,12 @@ impl<E: Collapsible + IntoElement> RenderOnce for Sidebar<E> {
             .bg(cx.theme().sidebar)
             .text_color(cx.theme().sidebar_foreground)
             .border_color(cx.theme().sidebar_border)
-            .rounded_2xl()  // Extra rounded corners - doubled the radius
             .map(|this| match self.side {
                 Side::Left => this.border_r(self.border_width),
                 Side::Right => this.border_l(self.border_width),
+            })
+            .when(self.floating, |this| {
+               this.rounded(cx.theme().radius).border(self.border_width)
             })
             .when_some(self.header.take(), |this, header| {
                 this.child(h_flex().id("header").p_2().gap_2().child(header))

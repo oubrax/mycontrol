@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::fs;
 use serde::{Serialize, Deserialize};
 use anyhow::{Result, Context};
@@ -33,11 +33,6 @@ impl AppConfig {
     #[inline(always)]
     pub fn global(cx: &gpui::App) -> &AppConfig {
         cx.global::<AppConfig>()
-    }
-    /// Returns the global AppConfig mutable reference
-    #[inline(always)]
-    pub fn global_mut(cx: &mut gpui::App) -> &mut AppConfig {
-        cx.global_mut::<AppConfig>()
     }
 }
 

@@ -8,13 +8,13 @@ use crate::{
     theme::ActiveTheme,
     tooltip::Tooltip,
 };
-use gpui::{transparent_white, FocusHandle};
 use gpui::{
-    Action, AnyElement, App, BoxShadow, ClickEvent, Corners, Div, Edges, ElementId, Hsla,
-    InteractiveElement, IntoElement, Keystroke, MouseButton, ParentElement, Pixels, Point,
+    Action, AnyElement, App, ClickEvent, Corners, Div, Edges, ElementId, Hsla,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, Pixels,
     RenderOnce, SharedString, StatefulInteractiveElement as _, Styled, Window, div,
-    prelude::FluentBuilder as _, px, relative,
+    prelude::FluentBuilder as _, relative,
 };
+use gpui::FocusHandle;
 
 #[derive(Clone, Copy)]
 pub enum ButtonRounded {
@@ -245,23 +245,7 @@ impl Button {
         }
     }
 
-    /// Create a priority focus handle for this button if it doesn't already have one.
-    /// This ensures the button will be focused first in the tab order.
-    fn ensure_priority_focus_handle(&mut self, cx: &mut App) {
-        if self.focus_handle.is_none() {
-            let handle = focus::get_or_create_focus_handle_with_priority(cx, self.id.clone());
-            self.focus_handle = Some(handle);
-        }
-    }
-
-    /// Create a focus handle with a specific priority index for this button if it doesn't already have one.
-    /// This ensures the button will be focused at the specified position in the tab order.
-    fn ensure_focus_handle_with_index(&mut self, cx: &mut App, priority_index: usize) {
-        if self.focus_handle.is_none() {
-            let handle = focus::get_or_create_focus_handle_with_index(cx, self.id.clone(), priority_index);
-            self.focus_handle = Some(handle);
-        }
-    }
+    // The focus cycle/order is now managed globally. Context: See focus::set_focus_cycle.
 
     /// Remove focus capability from this button.
     /// Call this if you don't want the button to be focusable.
@@ -373,74 +357,7 @@ impl Button {
         self
     }
 
-    /// Set the click handler with priority focus (will be focused first in tab order)
-    pub fn on_click_with_priority(
-        mut self,
-        cx: &mut App,
-        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        use std::rc::Rc;
-
-        // Ensure this button has a priority focus handle
-        self.ensure_priority_focus_handle(cx);
-
-        // Wrap the handler in Rc so we can share it
-        let shared_handler = Rc::new(handler);
-
-        // Register a clone for Enter key handling
-        let element_id = self.id.clone();
-        let enter_handler = shared_handler.clone();
-        focus::register_button_handler(
-            cx,
-            element_id,
-            Box::new(move |event, window, app| {
-                enter_handler(event, window, app);
-            }),
-        );
-
-        // Set the original handler for normal clicks
-        let click_handler = shared_handler.clone();
-        self.on_click = Some(Box::new(move |event, window, app| {
-            click_handler(event, window, app);
-        }));
-
-        self
-    }
-
-    /// Set the click handler with a specific priority index in the focus order
-    pub fn on_click_with_index(
-        mut self,
-        cx: &mut App,
-        priority_index: usize,
-        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        use std::rc::Rc;
-
-        // Ensure this button has a focus handle with the specified index
-        self.ensure_focus_handle_with_index(cx, priority_index);
-
-        // Wrap the handler in Rc so we can share it
-        let shared_handler = Rc::new(handler);
-
-        // Register a clone for Enter key handling
-        let element_id = self.id.clone();
-        let enter_handler = shared_handler.clone();
-        focus::register_button_handler(
-            cx,
-            element_id,
-            Box::new(move |event, window, app| {
-                enter_handler(event, window, app);
-            }),
-        );
-
-        // Set the original handler for normal clicks
-        let click_handler = shared_handler.clone();
-        self.on_click = Some(Box::new(move |event, window, app| {
-            click_handler(event, window, app);
-        }));
-
-        self
-    }
+    // Deprecated: on_click_with_priority and on_click_with_index are removed. Use on_click and set the focus cycle globally.
 
     /// Legacy method for backwards compatibility - now just calls on_click
     /// @deprecated Use on_click instead, which now automatically handles Enter key
@@ -610,47 +527,28 @@ impl RenderOnce for Button {
                             .text_color(active_style.fg)
                     })
             })
-            .when_some(
-                self.on_click.filter(|_| !self.disabled && !self.loading),
-                {
-                    let focus_handle = &self.focus_handle;
-                    move |this, on_click| {
-                        let stop_propagation = self.stop_propagation;
-                        let on_click = Rc::new(on_click);
-    
-                        this.on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                            window.prevent_default();
-                            if stop_propagation {
-                                cx.stop_propagation();
-                            }
-                        })
-                        // .on_key_down({
-                        //     let on_click = on_click.clone();
-                        //     let focus_handle = self.focus_handle.clone();
-                        //     move |event, window, cx| {
-                        //         println!("x");
-                        //         if (event.keystroke == Keystroke::parse("enter").unwrap()
-                        //             || event.keystroke == Keystroke::parse("space").unwrap())
-                        //             && focus_handle.is_focused(window)
-                        //         {
-                        //             let click_event = ClickEvent::default();
-                        //             (on_click)(&click_event, window, cx);
-                        //             window.prevent_default();
-                        //             cx.stop_propagation();
-                        //         }
-                        //     }
-                        // })
-                        .on_click({
-                            let on_click = on_click.clone();
-                            let handle = focus_handle.clone();
-                            move |event, window, cx| {
-                                handle.clone().map(|x|x.focus(window)).unwrap();
-                                (on_click)(event, window, cx);
-                            }
-                        })
-                    }
+            .when_some(self.on_click.filter(|_| !self.disabled && !self.loading), {
+                let focus_handle = &self.focus_handle;
+                move |this, on_click| {
+                    let stop_propagation = self.stop_propagation;
+                    let on_click = Rc::new(on_click);
+
+                    this.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        window.prevent_default();
+                        if stop_propagation {
+                            cx.stop_propagation();
+                        }
+                    })
+                    .on_click({
+                        let on_click = on_click.clone();
+                        let handle = focus_handle.clone();
+                        move |event, window, cx| {
+                            handle.clone().map(|x| x.focus(window)).unwrap();
+                            (on_click)(event, window, cx);
+                        }
+                    })
                 }
-            )
+            })
             .when(focused, |this| {
                 this.border_2().border_color(cx.theme().ring)
             })
@@ -661,7 +559,7 @@ impl RenderOnce for Button {
                     .border_color(disabled_style.border)
                     .shadow_none()
             })
-            .on_mouse_down_out( |_, win, _cx| {
+            .on_mouse_down_out(|_, win, _cx| {
                 focus::unfocus_all(win);
             })
             .child({

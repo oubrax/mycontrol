@@ -1,7 +1,7 @@
 mod config;
 
 use gpui::{
-    div, prelude::*, px, rems, size, transparent_black, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
+    div, prelude::*, px, rems, size, transparent_black, AnyElement, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, Global, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
 use rfd::FileDialog;
 use ui::{
@@ -11,11 +11,20 @@ use ui::{
 use crate::config::{AppConfig, load_config, save_config};
 use crate::config::ActiveConfig;
 
+#[derive(Debug, Clone, Copy)]
+enum Route {
+    Home,
+    Chat,
+    Settings
+}
+
+impl Global for Route {}
+
 // --- Control Root Structure ---
 struct ControlRoot {
     title_bar: Entity<ControlTitleBar>,
     view: AnyView,
-    sidebar_collapesed: bool,
+    sidebar_collapsed: bool,
 }
 
 impl ControlRoot {
@@ -29,17 +38,17 @@ impl ControlRoot {
 
         cx.subscribe(&title_bar, |this, _titlebar, event, cx| {
             if *event == TitleBarEvent::ToggleCollapse {
-                this.sidebar_collapesed = !this.sidebar_collapesed;
+                this.sidebar_collapsed = !this.sidebar_collapsed;
                 cx.notify();
             }
         }).detach();
 
-        focus::set_focus_cycle(cx, vec!["collapse", "theme-selector", "minimize", "zoom", "close",  "new-task", "textarea_main", "working_dir", "submit"]);
+        focus::set_focus_cycle(cx, vec!["collapse", "theme-selector", "minimize", "zoom", "close",  "new-task", "settings", "textarea_main", "working_dir", "submit"]);
      
         Self {
             title_bar,
             view: view.into(),
-            sidebar_collapesed: false,
+            sidebar_collapsed: false,
         }
     }
 }
@@ -47,6 +56,21 @@ impl ControlRoot {
 impl Render for ControlRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rounded_size = px(cx.config().ui_settings.rounded_size);
+
+        let settings_listener=
+            cx.listener(|_this, _: &ClickEvent, _window, cx| {
+                cx.set_global(Route::Settings);
+                cx.notify();
+            });
+
+        let settings_button =
+            Button::new("settings").w_full()
+                .outline()
+                .when(!self.sidebar_collapsed, |this | this.label("Settings"))
+                .icon(IconName::Settings)
+                .on_click(cx, settings_listener);
+
+        
         let notification_layer = Root::render_notification_layer(window, cx);
 
         v_flex()
@@ -64,13 +88,17 @@ impl Render for ControlRoot {
                             .child(
                                 Sidebar::left()
                                     .collapsible(true)
-                                    .collapsed(self.sidebar_collapesed)
+                                    .collapsed(self.sidebar_collapsed)
                                     .floating(true)
                                     .width(px(230.))
                                     
                                     .child(NewTaskSidebar::new().on_new_task(|_ev, window, cx| {
                                         window.push_notification(Notification::info("Creating new task..."), cx);
                                     }))
+                                    .footer(
+                                        settings_button
+                                    )
+
                         )
                     )
                     .child(
@@ -109,6 +137,7 @@ impl EventEmitter<TitleBarEvent> for ControlTitleBar {}
 impl Render for ControlTitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rounded_size = px(cx.config().ui_settings.rounded_size);
+
         TitleBar::new()
             .child(
                 h_flex()
@@ -170,15 +199,30 @@ impl MainApp {
             }
         }).detach();
 
+        cx.set_global(Route::Home);
+
         m
+    } 
+
+    fn render_settings_route(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("settings_route")
+            .size_full()
+            .bg(cx.theme().background)
+            .flex()
+            .flex_col()
+            .justify_center()
+            .items_center()
+            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
+                el.rounded_bl(cx.theme().radius)
+            })
+            .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.right)), |el| {
+                el.rounded_br(cx.theme().radius)
+            })
+            .child(div().child("Settings!"))
     }
-}
 
-impl EventEmitter<EnterFocusEvent> for MainApp {}
-
-impl Render for MainApp {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let rounded_size = px(cx.config().ui_settings.rounded_size);
+    fn render_home_route(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let textinput = TextInput::new(&self.textarea).bordered(false);
         let bg = if textinput.state.read(cx).is_disabled() {
             cx.theme().muted
@@ -197,8 +241,9 @@ impl Render for MainApp {
             } else {
                 window.push_notification(Notification::error("Please select a folder."), cx);
             }
-        });        div()
-            .id("main_app")
+        });
+        div()
+            .id("home_route")
             .size_full()
             .bg(cx.theme().background)
             .flex()
@@ -207,10 +252,10 @@ impl Render for MainApp {
             .justify_center()
             .items_center()
             .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
-                el.rounded_bl(rounded_size)
+                el.rounded_bl(cx.theme().radius)
             })
             .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.right)), |el| {
-                el.rounded_br(rounded_size)
+                el.rounded_br(cx.theme().radius)
             })
             .p_8()
             .child(
@@ -252,6 +297,23 @@ impl Render for MainApp {
                             )
                     )
             )
+    }
+    
+    fn render_main_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        match cx.global() {
+            Route::Home => self.render_home_route(window, cx).into_any_element(),
+            Route::Settings => self.render_settings_route(window, cx).into_any_element(),
+            _ => unreachable!()
+        }
+    }
+    
+}
+
+impl EventEmitter<EnterFocusEvent> for MainApp {}
+
+impl Render for MainApp {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_main_content(window, cx)
     }
 }
 

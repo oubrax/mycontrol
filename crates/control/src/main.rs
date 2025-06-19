@@ -20,6 +20,18 @@ enum Route {
 
 impl Global for Route {}
 
+
+trait Navigation {
+    fn goto(&mut self, route: Route);
+}
+
+impl <'a, T: 'static> Navigation for Context<'a, T> {
+    fn goto(&mut self, route: Route) {
+        self.set_global(route);
+        self.notify();
+    }
+}
+
 // --- Control Root Structure ---
 struct ControlRoot {
     title_bar: Entity<ControlTitleBar>,
@@ -55,12 +67,11 @@ impl ControlRoot {
 
 impl Render for ControlRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let rounded_size = px(cx.config().ui_settings.rounded_size);
+        let rounded_size = cx.theme().radius;
 
         let settings_listener=
             cx.listener(|_this, _: &ClickEvent, _window, cx| {
-                cx.set_global(Route::Settings);
-                cx.notify();
+                cx.goto(Route::Settings);
             });
 
         let settings_button =
@@ -72,7 +83,6 @@ impl Render for ControlRoot {
 
         
         let notification_layer = Root::render_notification_layer(window, cx);
-
         v_flex()
             .size_full()
             .rounded(rounded_size)
@@ -143,9 +153,11 @@ impl Render for ControlTitleBar {
                 h_flex()
                     .id("title-text")
                     .gap(px(2.))
+                    .font_semibold()
                     .child(SidebarToggleButton::left().on_click(cx.listener(|_this, _event, _window, cx| {
                         cx.emit(TitleBarEvent::ToggleCollapse);
                     })))
+                    .on_click(cx.listener(|_this, _event, _window, cx| cx.goto(Route::Home)))
                     .child(self.title.clone())
                     .text_color(cx.theme().foreground)
             )
@@ -157,10 +169,10 @@ impl Render for ControlTitleBar {
                     };
                     Theme::change(new_mode, Some(window), cx);
                     
-                    let mut config = cx.config().clone();
-                    config.theme_mode = new_mode;
-                    save_config(&config).ok();
-                    // Optional: *cx.global_mut::<AppConfig>() = config.clone();
+                    let mut new_config = cx.config().clone();
+                    new_config.theme_mode = new_mode;
+                    save_config(&new_config).ok();
+                    *cx.global_mut::<AppConfig>() = new_config;
                 }).outline()
             )
             .border_b_1()
@@ -211,8 +223,6 @@ impl MainApp {
             .bg(cx.theme().background)
             .flex()
             .flex_col()
-            .justify_center()
-            .items_center()
             .when(matches!(window.window_decorations(), Decorations::Client { tiling, .. } if !(tiling.bottom || tiling.left)), |el| {
                 el.rounded_bl(cx.theme().radius)
             })
@@ -233,10 +243,10 @@ impl MainApp {
         let on_file_click = cx.listener(|_this, _event: &ClickEvent, window, cx| {
             if let Some(p) = FileDialog::new().pick_folder() {
                 if p.to_str().unwrap_or("") != "" {
-                    let mut config = cx.config().clone();
-                    config.working_dir = Some(p);
-                    save_config(&config).ok();
-                    *cx.global_mut::<AppConfig>() = config.clone();
+                    let mut new_config = cx.config().clone();
+                    new_config.working_dir = Some(p);
+                    save_config(&new_config).ok();
+                    *cx.global_mut::<AppConfig>() = new_config;
                 }
             } else {
                 window.push_notification(Notification::error("Please select a folder."), cx);
@@ -289,7 +299,7 @@ impl MainApp {
                             .px(px(10.))
                             .child(
                                 Button::new("working_dir").outline().icon(IconName::Folder).compact()
-                                    .label(cx.config().working_dir.as_ref().map(|p| p.as_os_str().to_str().unwrap_or("...").to_string()).unwrap_or("Unselected".into()))
+                                    .label(cx.config().working_dir.as_ref().map(|p| p.as_os_str().to_str().unwrap_or("...").to_string()).unwrap_or_else(|| "Unselected".into()))
                                     .on_click(cx, on_file_click),
                             )
                             .child(

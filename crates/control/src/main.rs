@@ -1,7 +1,7 @@
 mod config;
 
 use gpui::{
-    div, prelude::*, px, rems, size, transparent_black, AnyElement, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, Entity, EventEmitter, Focusable, Global, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
+    div, prelude::*, px, rems, size, transparent_black, AnyElement, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, ElementId, Entity, EventEmitter, Focusable, Global, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
 };
 use rfd::FileDialog;
 use ui::{
@@ -18,6 +18,22 @@ enum Route {
     Settings
 }
 
+
+impl Route {
+    fn cycle(&self) -> Vec<impl Into<ElementId>> {
+        let mut titlebar = vec!["collapse", "theme-selector", "minimize", "zoom", "close"];
+
+        let r =match self {
+            Self::Home => vec!["new-task", "settings", "textarea_main", "working_dir", "submit"],
+            Self::Settings => Vec::new(),
+            Self::Chat => Vec::new(),
+        };
+
+        titlebar.extend(&r);
+
+        titlebar
+    }
+}
 impl Global for Route {}
 
 
@@ -27,6 +43,7 @@ trait Navigation {
 
 impl <'a, T: 'static> Navigation for Context<'a, T> {
     fn goto(&mut self, route: Route) {
+        focus::set_focus_cycle(self, route.cycle());
         self.set_global(route);
         self.notify();
     }
@@ -55,7 +72,6 @@ impl ControlRoot {
             }
         }).detach();
 
-        focus::set_focus_cycle(cx, vec!["collapse", "theme-selector", "minimize", "zoom", "close",  "new-task", "settings", "textarea_main", "working_dir", "submit"]);
      
         Self {
             title_bar,
@@ -212,7 +228,7 @@ impl MainApp {
         }).detach();
 
         cx.set_global(Route::Home);
-
+        focus::set_focus_cycle(cx, Route::Home.cycle());
         m
     } 
 

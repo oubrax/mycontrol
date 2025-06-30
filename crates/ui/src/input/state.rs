@@ -10,12 +10,12 @@ use std::rc::Rc;
 use unicode_segmentation::*;
 
 use gpui::{
-    actions, div, impl_internal_actions, point, prelude::FluentBuilder as _, px, relative, App,
-    AppContext, Bounds, ClipboardItem, Context, Entity, EntityInputHandler, EventEmitter,
+    App, AppContext, Bounds, ClipboardItem, Context, Entity, EntityInputHandler, EventEmitter,
     FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
     Render, ScrollHandle, ScrollWheelEvent, SharedString, Styled as _, Subscription,
-    UTF16Selection, Window, WrappedLine,
+    UTF16Selection, Window, WrappedLine, actions, div, impl_internal_actions, point,
+    prelude::FluentBuilder as _, px, relative,
 };
 
 // TODO:
@@ -32,7 +32,7 @@ use super::{
 };
 use crate::highlighter::SyntaxHighlighter;
 use crate::input::marker::Marker;
-use crate::{history::History, scroll::ScrollbarState, Root};
+use crate::{Root, history::History, scroll::ScrollbarState};
 
 #[derive(Clone, PartialEq, Eq, Deserialize)]
 pub struct Enter {
@@ -87,12 +87,14 @@ actions!(
     ]
 );
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum InputEvent {
     Change(SharedString),
     PressEnter { secondary: bool },
+    PressEscape,
     Focus,
     Blur,
+    EmptyTextUp,
 }
 
 pub(super) const CONTEXT: &str = "Input";
@@ -646,6 +648,12 @@ impl InputState {
         cx.notify();
     }
 
+    /// Move the cursor to the end of the input.
+    pub fn move_cursor_to_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let end = self.text.len();
+        self.move_to(end, window, cx);
+    }
+
     /// Insert text at the current cursor position.
     ///
     /// And the cursor will be moved to the end of inserted text.
@@ -725,8 +733,6 @@ impl InputState {
         self
     }
 
-
-
     /// Set the validation function of the input field.
     pub fn validate(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
         self.validate = Some(Box::new(f));
@@ -780,6 +786,10 @@ impl InputState {
     }
 
     pub(super) fn up(&mut self, _: &Up, window: &mut Window, cx: &mut Context<Self>) {
+        if self.text.is_empty() {
+            cx.emit(InputEvent::EmptyTextUp);
+        }
+
         if self.is_single_line() {
             return;
         }
@@ -1039,15 +1049,16 @@ impl InputState {
 
         let offset = self.next_boundary(self.cursor_offset());
         // ignore if offset is "\n"
-        if offset > 0 && self
-            .text_for_range(
-                self.range_to_utf16(&(offset - 1..offset)),
-                &mut None,
-                window,
-                cx,
-            )
-            .unwrap_or_default()
-            .eq("\n")
+        if offset > 0
+            && self
+                .text_for_range(
+                    self.range_to_utf16(&(offset - 1..offset)),
+                    &mut None,
+                    window,
+                    cx,
+                )
+                .unwrap_or_default()
+                .eq("\n")
         {
             return offset;
         }
@@ -1198,14 +1209,13 @@ impl InputState {
 
     pub(super) fn enter(&mut self, action: &Enter, window: &mut Window, cx: &mut Context<Self>) {
         if self.is_multi_line() && !action.secondary {
-
-              let indent = if self.mode.is_code_editor() {
+            let indent = if self.mode.is_code_editor() {
                 self.indent_of_next_line(window, cx)
             } else {
                 "".to_string()
             };
 
-              // Add newline and indent
+            // Add newline and indent
             let new_line_text = format!("\n{}", indent);
             self.replace_text_in_range(None, &new_line_text, window, cx);
         }
@@ -1341,7 +1351,7 @@ impl InputState {
         if self.clean_on_escape {
             return self.clean(window, cx);
         }
-
+        cx.emit(InputEvent::PressEscape);
         cx.propagate();
     }
 
@@ -1845,7 +1855,6 @@ impl InputState {
 
         true
     }
-    
 
     /// Set the mask pattern for formatting the input text.
     ///

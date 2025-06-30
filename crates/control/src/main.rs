@@ -1,55 +1,109 @@
+mod chat;
 mod config;
+mod state;
 
+use crate::chat::ActiveChat;
+use crate::config::{ActiveConfig, AppConfig, load_config, save_config};
+use crate::state::{Part, Role};
 use gpui::{
-    div, prelude::*, px, rems, size, transparent_black, AnyElement, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, ElementId, Entity, EventEmitter, Focusable, Global, SharedString, Window, WindowBounds, WindowDecorations, WindowOptions
+    AnyElement, AnyView, App, Application, Bounds, ClickEvent, Context, Decorations, ElementId,
+    Entity, EventEmitter, Focusable, Global, SharedString, Styled, WeakEntity, Window,
+    WindowBounds, WindowDecorations, WindowOptions, div, prelude::*, px, rems, size,
+    transparent_black,
 };
 use rfd::FileDialog;
 use ui::{
+    Assets, Button, Icon, IconName, NewTaskSidebar, Root, Sidebar, SidebarToggleButton, StyledExt,
+    TitleBar,
+    focus::{self, EnterFocusEvent},
+    h_flex, highlighter,
+    input::{self, InputEvent, InputState, TextInput},
+    notification::Notification,
     theme,
-    focus::{self, EnterFocusEvent}, h_flex, highlighter, input::{self, InputEvent, InputState, TextInput}, notification::Notification, theme::{ActiveTheme, Theme, ThemeMode}, v_flex, Assets, Button, ButtonVariants, ContextModal, Icon, IconName, NewTaskSidebar, Root, Sidebar, SidebarToggleButton, StyledExt, TitleBar
+    theme::{ActiveTheme, Theme, ThemeMode},
+    v_flex,
 };
-use crate::config::{AppConfig, load_config, save_config};
-use crate::config::ActiveConfig;
+use ui::{ButtonVariants, ContextModal};
 
 #[derive(Debug, Clone, Copy)]
 enum Route {
     Home,
     Chat,
-    Settings
+    Settings,
 }
-
 
 impl Route {
     fn cycle(&self) -> Vec<impl Into<ElementId>> {
         let mut titlebar = vec!["collapse", "theme-selector", "minimize", "zoom", "close"];
 
-        let r =match self {
-            Self::Home => vec!["new-task", "settings", "textarea_main", "working_dir", "submit"],
+        let r = match self {
+            Self::Home => vec![
+                "new-task",
+                "settings",
+                "textarea_main",
+                "working_dir",
+                "submit",
+            ],
             Self::Settings => Vec::new(),
-            Self::Chat => Vec::new(),
+            Self::Chat => vec![
+                "edit_message_textarea",
+                "cancel_edit_message",
+                "submit_edit_message",
+                "chat_textarea",
+                "chat_history",
+            ],
         };
 
         titlebar.extend(&r);
 
         titlebar
     }
+    fn default_focus(&self) -> Option<impl Into<ElementId>> {
+        match self {
+            Self::Home => Some("textarea_main"),
+            Self::Chat => Some("chat_textarea"),
+            Self::Settings => None,
+        }
+    }
 }
 impl Global for Route {}
-
 
 trait Navigation {
     fn goto(&mut self, route: Route);
 }
 
-impl <'a, T: 'static> Navigation for Context<'a, T> {
+impl<'a, T: 'static> Navigation for Context<'a, T> {
     fn goto(&mut self, route: Route) {
         focus::set_focus_cycle(self, route.cycle());
         self.set_global(route);
+
+        let default_focus = route.default_focus();
+        let window_handle = self.active_window();
+
+        if let (Some(default_focus), Some(window_handle)) = (default_focus, window_handle) {
+            let focus_handle = focus::get_or_create_focus_handle(self, default_focus.into());
+
+            let _ = window_handle.update(self, |_, window, _| {
+                window.focus(&focus_handle);
+            });
+        }
+
         self.notify();
     }
 }
 
-// --- Control Root Structure ---
+/// Always use this when NOT inside a subscribe function, otherwise the default focus wont work
+macro_rules! nav {
+    ($cx:expr, $route:expr) => {
+        $cx.spawn(async |this: gpui::WeakEntity<_>, cx| {
+            this.update(cx, |_, cx| {
+                cx.goto($route);
+            })
+        })
+        .detach()
+    };
+}
+
 struct ControlRoot {
     title_bar: Entity<ControlTitleBar>,
     view: AnyView,
@@ -70,9 +124,9 @@ impl ControlRoot {
                 this.sidebar_collapsed = !this.sidebar_collapsed;
                 cx.notify();
             }
-        }).detach();
+        })
+        .detach();
 
-     
         Self {
             title_bar,
             view: view.into(),
@@ -85,19 +139,16 @@ impl Render for ControlRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rounded_size = cx.theme().radius;
 
-        let settings_listener=
-            cx.listener(|_this, _: &ClickEvent, _window, cx| {
-                cx.goto(Route::Settings);
-            });
+        let settings_listener =
+            cx.listener(|_this, _: &ClickEvent, _window, cx| nav!(cx, Route::Settings));
 
-        let settings_button =
-            Button::new("settings").w_full()
-                .outline()
-                .when(!self.sidebar_collapsed, |this | this.label("Settings"))
-                .icon(IconName::Settings)
-                .on_click(cx, settings_listener);
+        let settings_button = Button::new("settings")
+            .w_full()
+            .outline()
+            .when(!self.sidebar_collapsed, |this| this.label("Settings"))
+            .icon(IconName::Settings)
+            .on_click(cx, settings_listener);
 
-        
         let notification_layer = Root::render_notification_layer(window, cx);
         v_flex()
             .size_full()
@@ -106,33 +157,30 @@ impl Render for ControlRoot {
             .child(
                 h_flex()
                     .flex_1()
-                    .overflow_hidden() 
+                    .overflow_hidden()
                     .child(
-                        div()
-                            .p(px(10.))
-                            .h_full() 
-                            .child(
-                                Sidebar::left()
-                                    .collapsible(true)
-                                    .collapsed(self.sidebar_collapsed)
-                                    .floating(true)
-                                    .width(px(230.))
-                                    
-                                    .child(NewTaskSidebar::new().on_new_task(|_ev, window, cx| {
-                                        window.push_notification(Notification::info("Creating new task..."), cx);
-                                    }))
-                                    .footer(
-                                        settings_button
-                                    )
-
-                        )
+                        div().p(px(10.)).h_full().child(
+                            Sidebar::left()
+                                .collapsible(true)
+                                .collapsed(self.sidebar_collapsed)
+                                .floating(true)
+                                .width(px(230.))
+                                .child(NewTaskSidebar::new().on_new_task(|_ev, window, cx| {
+                                    window.push_notification(
+                                        Notification::info("Creating new task..."),
+                                        cx,
+                                    );
+                                }))
+                                .footer(settings_button),
+                        ),
                     )
                     .child(
                         div()
                             .flex_1()
+                            .size_full()
                             .overflow_hidden()
-                            .child(self.view.clone())
-                    )
+                            .child(self.view.clone()),
+                    ),
             )
             .child(div().absolute().top_12().children(notification_layer))
     }
@@ -145,14 +193,11 @@ struct ControlTitleBar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TitleBarEvent {
-    ToggleCollapse
+    ToggleCollapse,
 }
 
 impl ControlTitleBar {
-    pub fn new(
-        title: impl Into<SharedString>,
-        _cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(title: impl Into<SharedString>, _cx: &mut Context<Self>) -> Self {
         Self {
             title: title.into(),
         }
@@ -162,7 +207,7 @@ impl ControlTitleBar {
 impl EventEmitter<TitleBarEvent> for ControlTitleBar {}
 impl Render for ControlTitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let rounded_size = px(cx.config().ui_settings.rounded_size);
+        let rounded_size = cx.theme().radius;
 
         TitleBar::new()
             .child(
@@ -173,7 +218,8 @@ impl Render for ControlTitleBar {
                     .child(SidebarToggleButton::left().on_click(cx.listener(|_this, _event, _window, cx| {
                         cx.emit(TitleBarEvent::ToggleCollapse);
                     })))
-                    .on_click(cx.listener(|_this, _event, _window, cx| cx.goto(Route::Home)))
+                    .cursor_pointer()
+                    .on_click(cx.listener(|_this, _event, _window, cx| nav!(cx, Route::Home)))
                     .child(self.title.clone())
                     .text_color(cx.theme().foreground)
             )
@@ -184,7 +230,7 @@ impl Render for ControlTitleBar {
                         ThemeMode::Dark => ThemeMode::Light,
                     };
                     Theme::change(new_mode, Some(window), cx);
-                    
+
                     let mut new_config = cx.config().clone();
                     new_config.theme_mode = new_mode;
                     save_config(&new_config).ok();
@@ -202,13 +248,41 @@ impl Render for ControlTitleBar {
     }
 }
 
-// --- Main Application View ---
 pub struct MainApp {
     textarea: Entity<InputState>,
+    active_chat: Entity<ActiveChat>,
 }
 
 impl MainApp {
-    fn new(window: &mut Window, cx: &mut App) -> Self {
+    fn submit_message(&self, cx: &mut Context<Self>, textarea: &Entity<InputState>) {
+        self.active_chat.update(cx, |chat, cx| {
+            let pushed = chat.chat_state.update(cx, |state, cx| {
+                let text = textarea.read(cx).value();
+                if text.trim().is_empty() {
+                    return false;
+                }
+
+                let id = state.add_message(Role::User, vec![Part::Text(text.trim().into())]);
+                chat.list_state.splice(id..id, 1);
+                true
+            });
+            if pushed {
+                cx.goto(Route::Chat);
+                cx.notify();
+            }
+            let window_handle = cx.active_window();
+
+            if let Some(window) = window_handle {
+                window
+                    .update(cx, |_, window, cx| {
+                        textarea.update(cx, |s, cx| s.set_value("", window, cx));
+                    })
+                    .ok();
+            }
+        });
+    }
+
+    fn new(window: &mut Window, cx: &mut Context<MainApp>) -> Self {
         let m = MainApp {
             textarea: cx.new(|cx| {
                 InputState::new(window, cx)
@@ -216,23 +290,46 @@ impl MainApp {
                     .multi_line()
                     .auto_grow(3, 6)
             }),
+            active_chat: cx.new(|cx| ActiveChat::new(window, cx)),
         };
+        let hs = [
+            ("textarea_main", m.textarea.focus_handle(cx)),
+            ("chat_history", m.active_chat.read(cx).focus_handle.clone()),
+            (
+                "chat_textarea",
+                m.active_chat.read(cx).chat_textarea.focus_handle(cx),
+            ),
+            (
+                "edit_message_textarea",
+                m.active_chat
+                    .read(cx)
+                    .edit_message_textarea
+                    .focus_handle(cx),
+            ),
+        ];
 
-        focus::register_focusable(cx, "textarea_main".into(), m.textarea.focus_handle(cx));
-        m.textarea.focus_handle(cx).focus(window);
+        for (n, h) in hs.clone() {
+            focus::register_focusable(cx, n.into(), h);
+        }
+        window.focus(&hs[0].1);
 
-        cx.subscribe(&m.textarea, |_i, e: &InputEvent, _cx| {
+        cx.subscribe(&m.textarea, |this, i, e: &InputEvent, cx| {
             if matches!(e, InputEvent::PressEnter { secondary: true }) {
-                dbg!("Submit triggered");
+                this.submit_message(cx, &i);
             }
-        }).detach();
+        })
+        .detach();
 
-        cx.set_global(Route::Home);
-        focus::set_focus_cycle(cx, Route::Home.cycle());
+        nav!(cx, Route::Home);
+
         m
-    } 
+    }
 
-    fn render_settings_route(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_settings_route(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         div()
             .id("settings_route")
             .size_full()
@@ -248,7 +345,11 @@ impl MainApp {
             .child(div().child("Settings!"))
     }
 
-    fn render_home_route(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_home_route(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let textinput = TextInput::new(&self.textarea).bordered(false);
         let bg = if textinput.state.read(cx).is_disabled() {
             cx.theme().muted
@@ -268,6 +369,18 @@ impl MainApp {
                 window.push_notification(Notification::error("Please select a folder."), cx);
             }
         });
+
+        let listener = cx.listener(|_this, _ev, _window, cx| {
+            cx.spawn(async |this: WeakEntity<Self>, cx| {
+                this.update(cx, |this, cx| {
+                    this.submit_message(cx, &this.textarea);
+                })
+                .ok();
+            })
+            .detach();
+            nav!(cx, Route::Chat);
+        });
+
         div()
             .id("home_route")
             .size_full()
@@ -289,13 +402,13 @@ impl MainApp {
             )
             .child(
                 div()
-                    .w_full() 
-                    .max_w(rems(48.)) 
+                    .w_full()
+                    .max_w(rems(48.))
                     .child(
                         textinput
                     )
                     .pb(px(10.))
-                    .rounded(cx.theme().radius)
+                    .rounded(cx.theme().radius * 1.5)
                     .when(appearance, |this| {
                         this.bg(bg)
                           .border_color(cx.theme().input)
@@ -303,14 +416,14 @@ impl MainApp {
                           .when(cx.theme().shadow, |this| this.shadow_sm())
                           .when(self.textarea.read(cx).focus_handle(cx).is_focused(window), |this| this.focused_border(cx))
                     })
-                
+
                     .child(
                         div()
                             .flex()
                             .rounded_b(cx.theme().radius)
                             .items_center()
                             .justify_between()
-                            .w_full() 
+                            .w_full()
                             .gap_2()
                             .px(px(10.))
                             .child(
@@ -319,20 +432,27 @@ impl MainApp {
                                     .on_click(cx, on_file_click),
                             )
                             .child(
-                                Button::new("submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.))).on_click(cx, |_event, _window, _cx| {})
+                                Button::new("submit").primary().icon(Icon::default().path(IconName::ArrowUp.path()).p(px(5.))).on_click(cx, listener)
                             )
                     )
             )
     }
-    
+
+    fn render_chat_route(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        self.active_chat.clone()
+    }
+
     fn render_main_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         match cx.global() {
             Route::Home => self.render_home_route(window, cx).into_any_element(),
             Route::Settings => self.render_settings_route(window, cx).into_any_element(),
-            _ => unreachable!()
+            Route::Chat => self.render_chat_route(window, cx).into_any_element(),
         }
     }
-    
 }
 
 impl EventEmitter<EnterFocusEvent> for MainApp {}
@@ -350,8 +470,15 @@ fn main() {
     let dark_colors = config.ui_settings.dark;
 
     let t = Theme {
-        all_colors: ui::theme::ThemeColorWithMode { light: light_colors.clone(), dark: dark_colors.clone() },
-        colors: if config.theme_mode == ThemeMode::Dark { dark_colors } else { light_colors },
+        all_colors: ui::theme::ThemeColorWithMode {
+            light: light_colors.clone(),
+            dark: dark_colors.clone(),
+        },
+        colors: if config.theme_mode == ThemeMode::Dark {
+            dark_colors
+        } else {
+            light_colors
+        },
         radius: px(config.ui_settings.rounded_size),
         shadow: false,
         font_family: "Geist".into(),

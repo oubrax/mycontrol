@@ -34,17 +34,14 @@ impl ScrollbarShow {
 }
 
 /// The width of the scrollbar (THUMB_ACTIVE_INSET * 2 + THUMB_ACTIVE_WIDTH)
-pub(crate) const WIDTH: Pixels = px(2. * 2. + 8.);
-const MIN_THUMB_SIZE: f32 = 48.;
-
-const THUMB_WIDTH: Pixels = px(6.);
-const THUMB_RADIUS: Pixels = Pixels(6. / 2.);
-const THUMB_INSET: Pixels = Pixels(2.);
-
-const THUMB_ACTIVE_WIDTH: Pixels = px(8.);
-const THUMB_ACTIVE_RADIUS: Pixels = Pixels(8. / 2.);
-const THUMB_ACTIVE_INSET: Pixels = Pixels(2.);
-
+pub(crate) const WIDTH: Pixels = px(1.5 * 2. + 6.);
+const MIN_THUMB_SIZE: f32 = 36.;
+const THUMB_WIDTH: Pixels = px(4.);
+const THUMB_RADIUS: Pixels = Pixels(4. / 2.);
+const THUMB_INSET: Pixels = Pixels(1.5);
+const THUMB_ACTIVE_WIDTH: Pixels = px(6.);
+const THUMB_ACTIVE_RADIUS: Pixels = Pixels(6. / 2.);
+const THUMB_ACTIVE_INSET: Pixels = Pixels(1.5);
 const FADE_OUT_DURATION: f32 = 3.0;
 const FADE_OUT_DELAY: f32 = 2.0;
 

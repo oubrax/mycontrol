@@ -8,13 +8,12 @@ use crate::{
     theme::ActiveTheme,
     tooltip::Tooltip,
 };
-use gpui::{
-    Action, AnyElement, App, ClickEvent, Corners, Div, Edges, ElementId, Hsla,
-    InteractiveElement, IntoElement, MouseButton, ParentElement, Pixels,
-    RenderOnce, SharedString, StatefulInteractiveElement as _, Styled, Window, div,
-    prelude::FluentBuilder as _, relative,
-};
 use gpui::FocusHandle;
+use gpui::{
+    Action, AnyElement, App, ClickEvent, Corners, Div, Edges, ElementId, Hsla, InteractiveElement,
+    IntoElement, MouseButton, ParentElement, Pixels, RenderOnce, SharedString,
+    StatefulInteractiveElement as _, Styled, Window, div, prelude::FluentBuilder as _, relative,
+};
 
 #[derive(Clone, Copy)]
 pub enum ButtonRounded {
@@ -357,18 +356,6 @@ impl Button {
         self
     }
 
-    // Deprecated: on_click_with_priority and on_click_with_index are removed. Use on_click and set the focus cycle globally.
-
-    /// Legacy method for backwards compatibility - now just calls on_click
-    /// @deprecated Use on_click instead, which now automatically handles Enter key
-    pub fn on_click_with_enter(
-        self,
-        cx: &mut App,
-        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_click(cx, handler)
-    }
-
     pub fn stop_propagation(mut self, val: bool) -> Self {
         self.stop_propagation = val;
         self
@@ -543,7 +530,7 @@ impl RenderOnce for Button {
                         let on_click = on_click.clone();
                         let handle = focus_handle.clone();
                         move |event, window, cx| {
-                            handle.clone().map(|x| x.focus(window)).unwrap();
+                            handle.clone().map(|x| x.focus(window));
                             (on_click)(event, window, cx);
                         }
                     })
@@ -556,7 +543,6 @@ impl RenderOnce for Button {
                 let disabled_style = style.disabled(self.outline, cx);
                 this.bg(disabled_style.bg)
                     .text_color(disabled_style.fg)
-                    .border_color(disabled_style.border)
                     .shadow_none()
             })
             .on_mouse_down_out(|_, win, _cx| {

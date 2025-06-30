@@ -84,6 +84,8 @@ pub enum IconName {
     WindowMinimize,
     WindowRestore,
     Folder,
+    Pencil,
+    CornerDownLeft,
 }
 
 impl IconName {
@@ -163,7 +165,9 @@ impl IconName {
             Self::WindowMaximize => "icons/window-maximize.svg",
             Self::WindowMinimize => "icons/window-minimize.svg",
             Self::WindowRestore => "icons/window-restore.svg",
-            Self::Folder => "icons/folder.svg"
+            Self::Folder => "icons/folder.svg",
+            Self::Pencil => "icons/pencil.svg",
+            Self::CornerDownLeft => "icons/corner-down-left.svg",
         }
         .into()
     }

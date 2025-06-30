@@ -131,7 +131,7 @@ pub trait StyledExt: Styled + Sized {
     /// Render a border with a width of 1px, color ring color
     #[inline]
     fn focused_border(self, cx: &App) -> Self {
-        self.border_color(cx.theme().ring)
+        self.border_color(cx.theme().ring.opacity(0.4))
     }
 
     /// Wraps the element in a ScrollView.

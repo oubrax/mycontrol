@@ -1,0 +1,19 @@
+[package]
+name = "control"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "control"
+path = "src/main.rs"
+
+[dependencies]
+ui = { path = "../ui" }
+agent = { path = "../agent" }
+tokio = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+gpui-component.workspace = true
+gpui.workspace = true
